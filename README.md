@@ -3,7 +3,7 @@
 ### Summary
 Bash scripts that will setup a DAP cluster w/ k8s authentication:
  * 1_docker_master: stands up DAP Master, Follower & CLI in Linux VM
- * 1_enable_k8s_in_master: patches existing DAP Master for authn-k8s
+ * 1_enable_master_for_k8s: patches existing DAP Master for authn-k8s
  * 2_ext_follower: initializes authentication to DAP Follower in Linux VM
  * 2_k8s_follower: stands up DAP Follower in K8s/OCP
  * 3_k8s_apps: deploys test applications in K8s/OCP cluster and verifies secrets retrieval
