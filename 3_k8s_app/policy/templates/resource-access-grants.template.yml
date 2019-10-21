@@ -1,0 +1,17 @@
+---
+- !policy
+  id: k8s-secrets
+  annotations:
+    description: This policy grants secrets access to application layers
+  body:
+
+  - !variable db-username
+  - !variable db-password
+
+- !permit
+  privileges: [ read, execute ]
+  roles:
+  - !layer /{{ TEST_APP_NAMESPACE_NAME }}
+  resources:
+  - !variable k8s-secrets/db-username
+  - !variable k8s-secrets/db-password

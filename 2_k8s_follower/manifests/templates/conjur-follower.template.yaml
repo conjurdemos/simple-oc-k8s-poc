@@ -1,0 +1,139 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: conjur-follower
+  labels:
+    app: conjur-follower
+spec:
+  ports:
+  - port: 443
+    name: https
+  selector:
+    app: conjur-follower
+---
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: conjur-follower
+spec:
+  replicas: {{ CONJUR_FOLLOWER_COUNT }}
+  template:
+    metadata:
+      labels:
+        app: conjur-follower
+        name: conjur-follower
+        role: follower
+    spec:
+      serviceAccountName: {{ CONJUR_SERVICEACCOUNT_NAME }}
+      hostAliases:
+      - ip: "{{ CONJUR_MASTER_HOST_IP }}"
+        hostnames:
+        - "{{ CONJUR_MASTER_HOST_NAME }}"
+      volumes:
+      - name: seedfile
+        emptyDir:
+          medium: Memory
+      - name: conjur-token
+        emptyDir:
+          medium: Memory
+
+      initContainers:
+      - name: authenticator
+        image: {{ CONJUR_SEED_FETCHER_IMAGE }}
+        imagePullPolicy: {{ IMAGE_PULL_POLICY }}
+        env:
+
+        # hardcoded values
+          - name: FOLLOWER_HOSTNAME
+            value: conjur-follower # this should be the same value as the service name
+          - name: SEEDFILE_DIR
+            value: /tmp/seedfile
+
+        # values from metaadata
+          - name: MY_POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: MY_POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: MY_POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+
+        # values from Conjur config map
+          - name: CONJUR_SEED_FILE_URL
+            valueFrom:
+              configMapKeyRef:
+                name: {{ CONJUR_CONFIG_MAP }}
+                key: conjur-seed-file-url
+          - name: AUTHENTICATOR_ID
+            valueFrom:
+              configMapKeyRef:
+                name: {{ CONJUR_CONFIG_MAP }}
+                key: authenticator-id
+          - name: CONJUR_ACCOUNT
+            valueFrom:
+              configMapKeyRef:
+                name: {{ CONJUR_CONFIG_MAP }}
+                key: conjur-account
+          - name: CONJUR_SSL_CERTIFICATE
+            valueFrom:
+              configMapKeyRef:
+                name: {{ CONJUR_CONFIG_MAP }}
+                key: master-certificate
+          - name: CONJUR_AUTHN_LOGIN
+            valueFrom:
+              configMapKeyRef:
+                name: {{ CONJUR_CONFIG_MAP }}
+                key: conjur-authn-login-cluster
+
+        volumeMounts:
+          - name: seedfile
+            mountPath: /tmp/seedfile
+          - name: conjur-token
+            mountPath: /run/conjur
+
+      containers:
+      - name: conjur-appliance
+        command: ["/tmp/seedfile/start-follower.sh"]
+        image: {{ CONJUR_APPLIANCE_IMAGE }}
+        imagePullPolicy: {{ IMAGE_PULL_POLICY }}
+        env:
+          - name: CONJUR_MASTER_PORT
+            value: "{{ CONJUR_MASTER_PORT }}"
+          - name: SEEDFILE_DIR
+            value: /tmp/seedfile
+          - name: CONJUR_AUTHENTICATORS
+            valueFrom:
+              configMapKeyRef:
+                name: {{ CONJUR_CONFIG_MAP }}
+                key: conjur-authenticators
+        resources:
+          requests:
+            cpu: "1"
+            memory: 2Gi
+          limits:
+            cpu: "1"
+            memory: 2Gi
+        ports:
+        - containerPort: 443
+          name: https
+        - containerPort: 5432
+          name: pg-main
+        - containerPort: 1999
+          name: pg-audit
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 443
+            scheme: HTTPS
+          initialDelaySeconds: 15
+          timeoutSeconds: 5
+        volumeMounts:
+          - name: seedfile
+            mountPath: /tmp/seedfile
+            readOnly: true

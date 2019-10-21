@@ -1,0 +1,27 @@
+# =================================================
+# == Register the Seed Service
+# =================================================
+- !policy
+  id: conjur/seed-generation
+  body:
+  # This webservice represents the Seed service API
+  - !webservice
+
+  # Hosts that generate seeds become members of the
+  # `consumers` layer.
+  - !layer consumers
+
+  # Authorize `consumers` to request seeds
+  - !permit
+    role: !layer consumers
+    privilege: [ "execute" ]
+    resource: !webservice
+
+# =================================================
+# == Grant entitlements
+# =================================================
+
+# Give followers permission to consume seeds
+- !grant
+  role: !layer conjur/seed-generation/consumers
+  member: !host conjur/authn-k8s/{{ AUTHENTICATOR_ID }}/apps/{{ CONJUR_NAMESPACE_NAME }}/service_account/{{ CONJUR_SERVICEACCOUNT_NAME }}

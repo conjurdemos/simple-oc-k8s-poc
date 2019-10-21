@@ -1,0 +1,39 @@
+---
+# This policy initializes the authentication service for the cluster
+- !policy
+  id: conjur/authn-k8s/{{ AUTHENTICATOR_ID }}
+  annotations:
+    description: Authenticator defs for the Conjur cluster 
+  body:
+  # vars for ocp/k8s api url & access creds
+  - !variable kubernetes/service-account-token
+  - !variable kubernetes/ca-cert
+  - !variable kubernetes/api-url
+
+  # vars for CA for this authenticator ID
+  - !variable ca/cert
+  - !variable ca/key
+
+  - !webservice
+    annotations:
+      description: authn service for cluster
+
+  - !layer apps
+
+  - &follower_service_accounts
+    - !host
+      id: apps/{{ CONJUR_NAMESPACE_NAME }}/service_account/{{ CONJUR_SERVICEACCOUNT_NAME }}
+      annotations:
+        kubernetes/authentication-container-name: authenticator
+        kubernetes: "true"
+
+  # Grant apps role to service accounts
+  - !grant
+    role: !layer apps
+    member: *follower_service_accounts
+
+  # grant apps role authentication privileges
+  - !permit
+    role: !layer apps
+    privilege: [ read, authenticate ]
+    resource: !webservice 

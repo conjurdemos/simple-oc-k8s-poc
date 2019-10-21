@@ -1,0 +1,14 @@
+- !policy
+  id: conjur/cluster/conjur-cluster
+  body:
+    - !layer
+    - &hosts
+      - !host
+        id: conjur1
+      - !host
+        id: conjur2
+      - !host
+        id: conjur3
+    - !grant
+      role: !layer
+      member: *hosts
