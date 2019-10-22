@@ -2,21 +2,23 @@
 set -euo pipefail
 
 source ../config/dap.config
-source ../config/kubernetes.config
+source ../config/$PLATFORM.config
 source ../config/utils.sh
 
-set_namespace default
-
 if has_namespace $TEST_APP_NAMESPACE_NAME; then
-  $CLI delete namespace $TEST_APP_NAMESPACE_NAME >& /dev/null &
+  if [[ "$PLATFORM" == "openshift" ]]; then
+    $CLI delete project $TEST_APP_NAMESPACE_NAME 
+  else
+    $CLI delete namespace $TEST_APP_NAMESPACE_NAME >& /dev/null &
+  fi
 
   printf "Waiting for $TEST_APP_NAMESPACE_NAME namespace deletion to complete"
 
   while : ; do
-    printf "..."
+    printf "."
     
-    if has_namespace "$TEST_APP_NAMESPACE_NAME"; then
-      sleep 5
+    if has_namespace $TEST_APP_NAMESPACE_NAME; then
+      sleep 2
     else
       break
     fi

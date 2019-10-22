@@ -1,6 +1,6 @@
 ---
 - !policy
-  id: testapp
+  id: testapps
   annotations:
     description: This policy defines the identity structure for the application
   body:
@@ -10,4 +10,4 @@
   - !grant
     role: !layer 
     members:
-    - !layer /conjur/authn-k8s/dev-ocp/apps
+    - !layer /conjur/authn-k8s/dev-atx/apps

@@ -27,9 +27,9 @@ spec:
     spec:
       serviceAccountName: conjur-cluster
       hostAliases:
-      - ip: "192.168.99.100"
+      - ip: "192.168.1.143"
         hostnames:
-        - "conjur-master-vbx"
+        - "conjur-master-mac"
       volumes:
       - name: seedfile
         emptyDir:
@@ -40,7 +40,7 @@ spec:
 
       initContainers:
       - name: authenticator
-        image: 172.30.1.1:5000/cyberark/seed-fetcher:cyberark
+        image: 192.168.1.143:5000/seed-fetcher:cyberark
         imagePullPolicy: IfNotPresent
         env:
 
@@ -100,7 +100,7 @@ spec:
       containers:
       - name: conjur-appliance
         command: ["/tmp/seedfile/start-follower.sh"]
-        image: 172.30.1.1:5000/cyberark/conjur-appliance:cyberark
+        image: 192.168.1.143:5000/conjur-appliance:cyberark
         imagePullPolicy: IfNotPresent
         env:
           - name: CONJUR_MASTER_PORT

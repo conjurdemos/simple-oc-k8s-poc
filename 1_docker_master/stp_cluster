@@ -4,6 +4,8 @@ set -eou pipefail
 . ../config/dap.config
 . ../config/utils.sh
 
+# Deletes a DAP Master HA cluster
+
 if [[ "$(docker ps -a | grep conjur-haproxy)" != "" ]]; then
   docker stop conjur-haproxy
   docker rm conjur-haproxy

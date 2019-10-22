@@ -5,6 +5,7 @@ source ../config/dap.config
 source ../config/$PLATFORM.config
 source ../config/utils.sh
 
+# Starts an DAP Master HA cluster
 
 main() {
   ./stp_cluster

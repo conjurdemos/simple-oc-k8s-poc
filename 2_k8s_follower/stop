@@ -27,7 +27,7 @@ $CLI delete --ignore-not-found sa conjur
 $CLI delete --ignore-not-found sa conjur-cluster
 
 echo "Waiting for Conjur pods to terminate..."
-while [[ "$($CLI get pods 2>&1 | grep follower)" != "" ]]; do
+while [[ "$($CLI get pods -n $CONJUR_NAMESPACE_NAME 2>&1)" != "No resources found." ]]; do
   echo -n '.'
   sleep 3
 done 

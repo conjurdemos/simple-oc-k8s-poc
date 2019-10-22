@@ -10,15 +10,19 @@ set_namespace default
 $CLI delete cm $CONJUR_CONFIG_MAP -n default --ignore-not-found
 
 if has_namespace $CONJUR_NAMESPACE_NAME; then
-  $CLI delete namespace $CONJUR_NAMESPACE_NAME >& /dev/null &
+  if [[ "$PLATFORM" == "openshift" ]]; then
+    $CLI delete project $CONJUR_NAMESPACE_NAME
+  else
+    $CLI delete namespace $CONJUR_NAMESPACE_NAME >& /dev/null &
+  fi
 
   printf "Waiting for $CONJUR_NAMESPACE_NAME namespace deletion to complete"
 
   while : ; do
-    printf "..."
+    printf "."
     
     if has_namespace "$CONJUR_NAMESPACE_NAME"; then
-      sleep 5
+      sleep 2
     else
       break
     fi
@@ -26,5 +30,10 @@ if has_namespace $CONJUR_NAMESPACE_NAME; then
 
   echo ""
 fi
+
+set +e
+conjur_appliance_image=$(repo_image_tag conjur-appliance $CONJUR_NAMESPACE_NAME)
+seed_fetcher_image_tag=$(repo_image_tag seed-fetcher $CONJUR_NAMESPACE_NAME)
+docker rmi $conjur_appliance_image $seed_fetcher_image_tag &> /dev/null
 
 echo "Conjur environment purged."

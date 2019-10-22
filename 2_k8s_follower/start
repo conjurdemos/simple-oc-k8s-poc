@@ -18,7 +18,7 @@ main() {
 }
 
 ###########################
-# Login with user parameter
+# Login with username parameter if in OpenShift
 #
 login_as() {
   local user=$1
@@ -47,7 +47,7 @@ apply_manifest() {
      ./manifests/templates/conjur-follower-authn.template.yaml  \
      > ./manifests/conjur-follower-authn-$CONJUR_NAMESPACE_NAME.yaml
 
-  $CLI apply -f ./manifests/conjur-follower-authn-$CONJUR_NAMESPACE_NAME.yaml
+  $CLI apply -f ./manifests/conjur-follower-authn-$CONJUR_NAMESPACE_NAME.yaml -n $CONJUR_NAMESPACE_NAME
 
   echo "Manifest applied."
 }
@@ -124,8 +124,8 @@ initialize_conjur_config_map() {
   $CLI delete --ignore-not-found=true -n default configmap $CONJUR_CONFIG_MAP
 
   # get cert and echo to file for later use
-  master_cert=$(./get_cert_REST.sh $CONJUR_MASTER_HOST_NAME $CONJUR_MASTER_PORT)
-  echo $master_cert > $MASTER_CERT_FILE
+  master_cert="$(./get_cert_REST.sh $CONJUR_MASTER_HOST_NAME $CONJUR_MASTER_PORT)"
+  echo "$master_cert" > $MASTER_CERT_FILE
 
   # Set Conjur Master URL to docker host & port
   master_url="https://$CONJUR_MASTER_HOST_NAME:$CONJUR_MASTER_PORT"
@@ -223,7 +223,7 @@ deploy_follower_pods() {
     sed -e "s#{{ CONJUR_CONFIG_MAP }}#$CONJUR_CONFIG_MAP#g" |
     sed -e "s#{{ CONJUR_FOLLOWER_COUNT }}#${CONJUR_FOLLOWER_COUNT}#g" \
     > ./manifests/conjur-follower-$CONJUR_NAMESPACE_NAME.yaml
-    $CLI create -f ./manifests/conjur-follower-$CONJUR_NAMESPACE_NAME.yaml
+    $CLI apply -n $CONJUR_NAMESPACE_NAME -f ./manifests/conjur-follower-$CONJUR_NAMESPACE_NAME.yaml
 }
 
 ###################################
@@ -231,9 +231,9 @@ deploy_follower_pods() {
 #
 re_create_conjur_config_map() {
   # Wait for Follower to initialize
-  follower_pod_name=$($CLI get pods | grep conjur-follower | tail -1 | awk '{print $1}')
   echo "Waiting until Follower is ready (about 40 secs)."
-  while [[ 'True' != $(kubectl get po "$follower_pod_name" -o 'jsonpath={.status.conditions[?(@.type=="Ready")].status}') ]]; do
+  follower_pod_name=$($CLI get pods -n $CONJUR_NAMESPACE_NAME | grep conjur-follower | tail -1 | awk '{print $1}')
+  while [[ 'True' != $($CLI get po "$follower_pod_name" -n $CONJUR_NAMESPACE_NAME -o 'jsonpath={.status.conditions[?(@.type=="Ready")].status}') ]]; do
     echo -n "."; sleep 3
   done
   echo ""
@@ -245,7 +245,7 @@ re_create_conjur_config_map() {
   master_cert=$(cat "$MASTER_CERT_FILE")
 
   # cache Follower cert in file for later use
-  follower_cert="$($CLI exec $follower_pod_name -- cat /opt/conjur/etc/ssl/conjur.pem)"
+  follower_cert="$($CLI exec -n $CONJUR_NAMESPACE_NAME $follower_pod_name -- cat /opt/conjur/etc/ssl/conjur.pem)"
   echo "$follower_cert" > $FOLLOWER_CERT_FILE
 
   master_url="https://$CONJUR_MASTER_HOST_NAME:$CONJUR_MASTER_PORT"

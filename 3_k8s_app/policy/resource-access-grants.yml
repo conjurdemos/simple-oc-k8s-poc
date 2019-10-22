@@ -11,7 +11,7 @@
 - !permit
   privileges: [ read, execute ]
   roles:
-  - !layer /testapp
+  - !layer /testapps
   resources:
   - !variable k8s-secrets/db-username
   - !variable k8s-secrets/db-password
