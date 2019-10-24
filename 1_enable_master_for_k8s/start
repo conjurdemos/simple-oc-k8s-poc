@@ -4,7 +4,7 @@ source ../config/dap.config
 source ../config/$PLATFORM.config
 
 # This script enables authn-k8s in a running DAP Master.
-# It's useful if a DAP Master were stood up w/o using the 1_docker_master script.
+# It's useful for the case where a DAP Master were stood up w/o using the 1_docker_master script.
 # It must be run on the host where the DAP Master is running.
 # It does NOT need to use kubectl or oc.
 

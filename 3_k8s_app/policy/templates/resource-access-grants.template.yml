@@ -15,3 +15,9 @@
   resources:
   - !variable k8s-secrets/db-username
   - !variable k8s-secrets/db-password
+
+# To grant apps to secrets in safes synced from PAS,
+# uncomment and set VAULT, LOB and SAFE to correct values
+#- !grant
+#  role: !group VAULT/LOB/SAFE/delegation/consumers
+#  member: !layer {{ TEST_APP_NAMESPACE_NAME }}
