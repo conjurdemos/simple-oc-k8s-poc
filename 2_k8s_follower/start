@@ -45,7 +45,8 @@ apply_manifest() {
   echo "Applying Follower authn-k8s manifest..."
 
   sed -e "s#{{ CONJUR_NAMESPACE_NAME }}#$CONJUR_NAMESPACE_NAME#g" \
-     ./manifests/templates/conjur-follower-authn.template.yaml  \
+     ./manifests/templates/conjur-follower-authn.template.yaml  |
+     sed -e "s#{{ CONJUR_SERVICEACCOUNT_NAME }}#$CONJUR_SERVICEACCOUNT_NAME#g" \
      > ./manifests/conjur-follower-authn-$CONJUR_NAMESPACE_NAME.yaml
 
   $CLI apply -f ./manifests/conjur-follower-authn-$CONJUR_NAMESPACE_NAME.yaml -n $CONJUR_NAMESPACE_NAME
@@ -76,7 +77,7 @@ verify_k8s_api_access() {
   fi
 
   TOKEN_SECRET_NAME="$($CLI get secrets -n $CONJUR_NAMESPACE_NAME \
-    | grep 'conjur.*service-account-token' \
+    | grep "${CONJUR_SERVICEACCOUNT_NAME}.*service-account-token" \
     | head -n1 \
     | awk '{print $1}')"
   CERT="$($CLI get secret -n $CONJUR_NAMESPACE_NAME $TOKEN_SECRET_NAME -o json \
@@ -196,7 +197,7 @@ initialize_variables() {
   fi
 
   TOKEN_SECRET_NAME="$($CLI get secrets -n $CONJUR_NAMESPACE_NAME \
-    | grep 'conjur.*service-account-token' \
+    | grep "${CONJUR_SERVICEACCOUNT_NAME}.*service-account-token" \
     | head -n1 \
     | awk '{print $1}')"
 

@@ -52,11 +52,6 @@ create_test_app_namespace() {
     $CLI create namespace $TEST_APP_NAMESPACE_NAME
   fi
   set_namespace $TEST_APP_NAMESPACE_NAME
-
-  $CLI delete --ignore-not-found rolebinding test-app-conjur-authenticator-role-binding-$CONJUR_NAMESPACE_NAME
-  sed -e "s#{{ TEST_APP_NAMESPACE_NAME }}#$TEST_APP_NAMESPACE_NAME#g" ./manifests/test-app-conjur-authenticator-role-binding.yml |
-    sed -e "s#{{ CONJUR_NAMESPACE_NAME }}#$CONJUR_NAMESPACE_NAME#g" |
-    $CLI create -f -
 }
 
 ###################################

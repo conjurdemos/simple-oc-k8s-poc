@@ -9,7 +9,7 @@ metadata:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: conjur-cluster
+  name: {{ CONJUR_SERVICEACCOUNT_NAME }}
   namespace: {{ CONJUR_NAMESPACE_NAME }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -36,7 +36,7 @@ metadata:
   name: conjur-authenticator
 subjects:
 - kind: ServiceAccount
-  name: conjur-cluster
+  name: {{ CONJUR_SERVICEACCOUNT_NAME }}
   namespace: {{ CONJUR_NAMESPACE_NAME }}
 roleRef:
   kind: ClusterRole

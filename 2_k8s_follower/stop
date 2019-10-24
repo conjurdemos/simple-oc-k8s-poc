@@ -13,6 +13,9 @@ if [[ $PLATFORM == "openshift" ]]; then
   oc login -u $CLUSTER_ADMIN_USERNAME
 fi
 
+echo "Deleting instantiated manifests..."
+rm manifests/*.yaml
+
 echo "Deleting Follower pods."
 $CLI delete deployment/conjur-follower --force=true --grace-period=0
 $CLI delete svc/conjur-follower --force=true --grace-period=0
@@ -23,8 +26,7 @@ $CLI delete --ignore-not-found cm $CONJUR_CONFIG_MAP
 echo "Deleting cluster roles, role bindings and service accounts."
 $CLI delete --ignore-not-found clusterrole conjur-authenticator-$CONJUR_NAMESPACE_NAME
 $CLI delete --ignore-not-found rolebinding conjur-authenticator-role-binding-$CONJUR_NAMESPACE_NAME
-$CLI delete --ignore-not-found sa conjur
-$CLI delete --ignore-not-found sa conjur-cluster
+$CLI delete --ignore-not-found sa $CONJUR_SERVICEACCOUNT_NAME
 
 echo "Waiting for Conjur pods to terminate..."
 while [[ "$($CLI get pods -n $CONJUR_NAMESPACE_NAME 2>&1)" != "No resources found." ]]; do

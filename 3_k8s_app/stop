@@ -5,13 +5,13 @@ source ../config/dap.config
 source ../config/$PLATFORM.config
 source ../config/utils.sh
 
-#set_namespace $TEST_APP_NAMESPACE_NAME
-
 if ! [ "${DOCKER_EMAIL}" = "" ]; then
-  announce "Deleting image pull secret."
-    
+  echo "Deleting image pull secret."
   $CLI delete --ignore-not-found secret dockerpullsecret -n $TEST_APP_NAMESPACE_NAME
 fi
+
+echo "Deleting instantiated policies & manifests..."
+rm manifests/*.yml policy/*.yml
 
 echo "Deleting config map..."
 $CLI delete --ignore-not-found cm $CONJUR_CONFIG_MAP -n $TEST_APP_NAMESPACE_NAME

@@ -10,6 +10,7 @@ source ../config/utils.sh
 #################
 main() {
   apply_manifest
+  verify_k8s_api_access
   initialize_variables
   initialize_config_map
 }
@@ -18,12 +19,49 @@ main() {
 apply_manifest() {
   echo "Applying manifest in cluster..."
 
-  sed -e "s#{{ CONJUR_NAMESPACE_NAME }}#$CONJUR_NAMESPACE_NAME#g" \
-     ./manifests/conjur-follower-authn.template.yaml \
-    > ./manifests/conjur-follower-authn.yaml
-  $CLI apply -f ./manifests/conjur-follower-authn.yaml
+  sed -e "s#{{ CONJUR_NAMESPACE_NAME }}#$CONJUR_NAMESPACE_NAME#g"   \
+     ./manifests/templates/conjur-follower-authn.template.yaml 	    |
+    sed -e "s#{{ CONJUR_SERVICEACCOUNT_NAME }}#$CONJUR_SERVICEACCOUNT_NAME#g" \
+    > ./manifests/conjur-follower-authn-$CONJUR_NAMESPACE_NAME.yaml
+  $CLI apply -f ./manifests/conjur-follower-authn-$CONJUR_NAMESPACE_NAME.yaml
 
   echo "Manifest applied."
+}
+
+###################################
+# Validates access to K8s API with service account credentials.
+#
+verify_k8s_api_access() {
+  echo "Verifying service account access to K8s API..."
+  # Use a cap-D for decoding on Macs
+  if [[ "$(uname -s)" == "Linux" ]]; then
+    BASE64D="base64 -d"
+  else
+    BASE64D="base64 -D"
+  fi
+
+  TOKEN_SECRET_NAME="$($CLI get secrets -n $CONJUR_NAMESPACE_NAME \
+    | grep 'conjur.*service-account-token' \
+    | head -n1 \
+    | awk '{print $1}')"
+  CERT="$($CLI get secret -n $CONJUR_NAMESPACE_NAME $TOKEN_SECRET_NAME -o json \
+      | jq -r '.data["ca.crt"]' \
+      | $BASE64D)"
+  TOKEN="$($CLI get secret -n $CONJUR_NAMESPACE_NAME $TOKEN_SECRET_NAME -o json \
+      | jq -r .data.token \
+      | $BASE64D)"
+  API="$($CLI config view --minify -o yaml | grep server | awk '{print $2}')"
+
+  echo "$CERT" > k8s.crt
+  if [[ "$(curl -s --cacert k8s.crt --header "Authorization: Bearer ${TOKEN}" $API/healthz)" == "ok" ]]; then
+    echo "Service account access to K8s API verified."
+  else
+    echo
+    echo ">>> Service account access to K8s API NOT verified. <<<"
+    echo
+    exit -1
+  fi
+  rm k8s.crt
 }
 
 ###################################

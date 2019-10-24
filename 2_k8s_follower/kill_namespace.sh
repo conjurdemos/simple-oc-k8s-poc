@@ -8,6 +8,8 @@ source ../config/utils.sh
 set_namespace default
 
 $CLI delete cm $CONJUR_CONFIG_MAP -n default --ignore-not-found
+$CLI delete clusterrole conjur-authenticator --ignore-not-found
+$CLI delete clusterrolebinding conjur-authenticator --ignore-not-found
 
 if has_namespace $CONJUR_NAMESPACE_NAME; then
   if [[ "$PLATFORM" == "openshift" ]]; then
