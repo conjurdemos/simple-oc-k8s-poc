@@ -92,6 +92,7 @@ init_follower_authn() {
  load_policies
  initialize_ca
  whitelist_authenticators
+ wait_till_master_is_responsive
 }
 
 ###################################
@@ -182,6 +183,17 @@ load_demo_policy() {
   ./load_policy_REST.sh root ./policy/demo-policy.yml
   ./var_value_add_REST.sh secrets/db-username "This-is-the-DB-username"
   ./var_value_add_REST.sh secrets/db-password $(openssl rand -hex 12)
+}
+
+############################
+wait_till_master_is_responsive() {
+  set +e
+  master_is_healthy=""
+  while [[ "$master_is_healthy" == "" ]]; do
+    sleep 2
+    master_is_healthy=$(docker exec -it conjur-cli curl -k $CONJUR_APPLIANCE_URL/health | grep "ok" | tail -1 | grep "true")
+  done
+  set -e
 }
 
 main "$@"
