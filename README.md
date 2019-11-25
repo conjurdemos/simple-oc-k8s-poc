@@ -24,6 +24,10 @@ Bash scripts that will setup a DAP cluster w/ k8s authentication:
    - require cluster access with kubectl/oc CLIs.
    - do not need "docker exec" access to the DAP Master or external Follower containers.
    - assume the external Follower already has authn-k8s enabled & configured.
+ - By default, the Follower seedfile is pulled from a configmap by a NON-STANDARD seed-fetcher.
+   If CONJUR_SEED_FILE_URL is set, e.g. to $CONJUR_MASTER_URL/configuration/$CONJUR_ACCOUNT/seed/follower,
+   the seed-fetcher will pull the seedfile from the Master.
+ - auth-k8s for apps is supported by Followers running in or outside of the cluster.
 
 ### Prerequisites
 1. Docker

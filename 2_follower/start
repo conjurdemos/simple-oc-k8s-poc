@@ -20,9 +20,11 @@ main() {
   ./stop
 
   initialize_variables
-  initialize_config_maps
-  registry_login
-  deploy_follower_pods
+  if $CONJUR_FOLLOWERS_IN_CLUSTER; then
+    initialize_config_maps
+    registry_login
+    deploy_follower_pods
+  fi
   update_conjur_config_map
 }
 
@@ -195,10 +197,6 @@ update_conjur_config_map() {
 
   # Must delete config map before recreating it
   $CLI -n $CONJUR_NAMESPACE_NAME delete cm ${CONJUR_CONFIG_MAP} --ignore-not-found
-
-  CONJUR_FOLLOWER_CERT="$($CLI -n $CONJUR_NAMESPACE_NAME exec \
-		$follower_pod_name -- cat /opt/conjur/etc/ssl/conjur.pem)"
-  echo "$CONJUR_FOLLOWER_CERT" > $FOLLOWER_CERT_FILE  	# cache Follower cert in file for later use
 
   # Append Follower cert to config map 
   cat << EOL3 | $CLI -n $CONJUR_NAMESPACE_NAME apply -f -
