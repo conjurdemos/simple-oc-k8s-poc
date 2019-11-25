@@ -1,0 +1,26 @@
+#!/bin/bash
+#set -eo pipefail
+
+source ../config/dap.config
+source ../config/utils.sh
+
+announce "Deleting Follower deployment & service."
+
+login_as $DAP_ADMIN_USERNAME
+
+echo "Deleting Follower pods."
+$CLI delete deployment/conjur-follower --force=true --grace-period=0 -n $CONJUR_NAMESPACE_NAME --ignore-not-found
+$CLI delete svc/conjur-follower --force=true --grace-period=0 -n $CONJUR_NAMESPACE_NAME --ignore-not-found
+
+echo "Deleting server-certificate config map."
+$CLI delete cm $CONJUR_CONFIG_MAP -n $CONJUR_NAMESPACE_NAME --ignore-not-found
+$CLI delete cm $FOLLOWER_CONFIG_MAP -n $CONJUR_NAMESPACE_NAME --ignore-not-found
+
+echo "Waiting for Conjur pods to terminate..."
+while [[ "$($CLI get pods -n $CONJUR_NAMESPACE_NAME 2>&1 | grep conjur-follower)" != "" ]]; do
+  echo -n '.'
+  sleep 3
+done 
+echo
+
+echo "Followers deleted."

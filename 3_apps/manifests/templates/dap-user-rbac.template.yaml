@@ -1,0 +1,68 @@
+# Define project namespace
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ TEST_APP_NAMESPACE_NAME }}
+  labels:
+    name: {{ TEST_APP_NAMESPACE_NAME }}
+
+# Role binding to cluster role enabling {{ DEVELOPER_USERNAME }} to access the DAP config map
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: dap-cm-access-binding
+  namespace: {{ CONJUR_NAMESPACE_NAME }}
+subjects:
+- kind: User
+  name: {{ DEVELOPER_USERNAME }}
+roleRef:
+  kind: ClusterRole
+  name: dap-cmaccess
+  apiGroup: rbac.authorization.k8s.io
+
+# Grant project admin privileges to {{ DEVELOPER_USERNAME }}
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: project-admin-access-binding
+  namespace: {{ TEST_APP_NAMESPACE_NAME }}
+subjects:
+- kind: User
+  name: {{ DEVELOPER_USERNAME }}
+roleRef:
+  kind: ClusterRole
+  name: admin
+  apiGroup: rbac.authorization.k8s.io
+
+# Grant image-builder privileges to {{ DEVELOPER_USERNAME }}
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: project-image-builder-binding
+  namespace: {{ TEST_APP_NAMESPACE_NAME }}
+subjects:
+- kind: User
+  name: {{ DEVELOPER_USERNAME }}
+roleRef:
+  kind: ClusterRole
+  name: system:image-builder
+  apiGroup: rbac.authorization.k8s.io
+
+# Grant registry privileges to {{ DEVELOPER_USERNAME }}
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: project-registry-binding
+  namespace: {{ TEST_APP_NAMESPACE_NAME }}
+subjects:
+- kind: User
+  name: {{ DEVELOPER_USERNAME }}
+roleRef:
+  kind: ClusterRole
+  name: system:registry
+  apiGroup: rbac.authorization.k8s.io

@@ -1,0 +1,144 @@
+#!/bin/bash
+
+source ../config/dap.config
+source ../config/$PLATFORM.config
+
+# This script deletes running instances and brings up 
+#   initialized Conjur Master, Follower & CLI nodes.
+#   It loads a simple demo policy and leaves the user
+#   logged into the CLI as the admin user.
+
+#################
+main() {
+  precheck.sh
+  ./stop
+  while [[ "$(docker ps -a | grep $CONJUR_MASTER_CONTAINER_NAME)" != "" ]]; do
+    echo -n '.'
+    sleep 3
+  done
+#  configure_networking
+  shared_volumes_up
+  master_up
+  ./enable_dap_node_for_k8s.sh
+  cli_up
+  follower_up
+  load_demo_policy
+  ./exec-into-cli.sh
+}
+
+#################
+configure_networking() {
+  # enable IPV4 port forwarding
+  sysctl -w net.ipv4.ip_forward=1
+  # update local firewall rules to allow container-container connections
+  firewall-cmd --permanent --zone=public --add-rich-rule='rule family=ipv4 source address=172.17.0.0/16 accept'
+  firewall-cmd --reload
+}
+
+############################
+shared_volumes_up() {
+  docker volume create $CONJUR_AUDIT_VOLUME
+  docker volume create $CONJUR_NGINX_VOLUME
+}
+
+#################
+master_up() {
+  # Bring up Conjur Master node
+  docker run -d \
+    --name $CONJUR_MASTER_CONTAINER_NAME \
+    --label role=conjur_node \
+    -p "$CONJUR_MASTER_PORT:443" \
+    -p "$CONJUR_MASTER_PGSYNC_PORT:5432" \
+    -p "$CONJUR_MASTER_PGAUDIT_PORT:1999" \
+    --volume $CONJUR_AUDIT_VOLUME:/var/log/conjur \
+    --volume $CONJUR_NGINX_VOLUME:/var/log/nginx \
+    --restart always \
+    --security-opt seccomp:unconfined \
+    $CONJUR_APPLIANCE_IMAGE 
+
+  # Configure Conjur Master node
+  echo "Configuring Conjur master..."
+  docker exec $CONJUR_MASTER_CONTAINER_NAME \
+                evoke configure master      \
+		--accept-eula		    \
+                -h $CONJUR_MASTER_HOST_NAME \
+                -p $CONJUR_ADMIN_PASSWORD   \
+		--master-altnames "$MASTER_ALTNAMES"     \
+		--follower-altnames "$FOLLOWER_ALTNAMES" \
+                $CONJUR_ACCOUNT
+
+  echo "Caching DAP Master certificate..."
+  mkdir -p $CACHE_DIR
+  rm -f $MASTER_CERT_FILE $FOLLOWER_CERT_FILE
+  docker cp -L $CONJUR_MASTER_CONTAINER_NAME:/opt/conjur/etc/ssl/conjur.pem $MASTER_CERT_FILE
+
+  echo "Caching Conjur Follower seed file..."
+  rm -f $FOLLOWER_SEED_FILE
+  docker exec $CONJUR_MASTER_CONTAINER_NAME evoke seed follower conjur-follower > $FOLLOWER_SEED_FILE
+
+  echo "Master configured."
+}
+
+#################
+cli_up() {
+  docker run -d \
+    --name $CLI_CONTAINER_NAME \
+    --label role=cli \
+    --restart always \
+    --security-opt seccomp:unconfined \
+    --add-host "$CONJUR_MASTER_HOST_NAME:$CONJUR_MASTER_HOST_IP" \
+    --entrypoint sh \
+    $CLI_IMAGE \
+    -c "sleep infinity"
+
+  # Initialize connection to service (create .conjurrc and conjur-xx.pem cert)
+  docker exec $CLI_CONTAINER_NAME \
+    bash -c "echo yes | conjur init -u $CONJUR_APPLIANCE_URL -a $CONJUR_ACCOUNT"
+
+  # Login as admin
+  docker exec $CLI_CONTAINER_NAME \
+    conjur authn login -u admin -p $CONJUR_ADMIN_PASSWORD
+}
+
+############################
+follower_up() {
+  # Bring up Conjur Follower node
+  docker run -d \
+    --name $CONJUR_FOLLOWER_CONTAINER_NAME \
+    --label role=conjur_node \
+    -p "$CONJUR_FOLLOWER_PORT:443" \
+    -e "CONJUR_AUTHENTICATORS=$CONJUR_AUTHENTICATORS" \
+    --restart always \
+    --security-opt seccomp:unconfined \
+    $CONJUR_APPLIANCE_IMAGE
+
+  if $NO_DNS; then
+    # add entry to follower's /etc/hosts so $CONJUR_MASTER_HOST_NAME resolves
+    docker exec -it $CONJUR_FOLLOWER_CONTAINER_NAME \
+	bash -c "echo \"$CONJUR_MASTER_HOST_IP $CONJUR_MASTER_HOST_NAME\" >> /etc/hosts"
+  fi
+
+  echo "Initializing Conjur Follower"
+  docker cp $FOLLOWER_SEED_FILE \
+		$CONJUR_FOLLOWER_CONTAINER_NAME:/tmp/follower-seed.tar
+  docker exec $CONJUR_FOLLOWER_CONTAINER_NAME \
+		evoke unpack seed /tmp/follower-seed.tar
+  docker exec $CONJUR_FOLLOWER_CONTAINER_NAME \
+		evoke configure follower -p $CONJUR_MASTER_PORT
+
+  echo "Caching DAP Follower cert ..."
+  rm -f $FOLLOWER_CERT_FILE
+  docker cp -L $CONJUR_FOLLOWER_CONTAINER_NAME:/opt/conjur/etc/ssl/conjur-follower.pem $FOLLOWER_CERT_FILE
+
+  echo "Follower configured."
+}
+
+############################
+load_demo_policy() {
+  # Laod policy & init variables
+  load_policy_REST.sh root ./policy/demo-policy.yml
+  var_value_add_REST.sh secrets/db-username "This-is-the-DB-username"
+  var_value_add_REST.sh secrets/db-password $(openssl rand -hex 12)
+}
+
+main "$@"

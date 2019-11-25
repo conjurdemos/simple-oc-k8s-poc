@@ -1,0 +1,256 @@
+#!/bin/bash 
+set -eo pipefail
+
+source ../config/dap.config
+source ../config/$PLATFORM.config
+source ../config/utils.sh
+
+# Starts an DAP Master HA cluster
+
+main() {
+  ./stp_cluster
+  master_network_up
+  shared_volumes_up
+  master_up
+  start_standbys
+  haproxy_up
+  cli_up
+  ./enable_dap_node_for_k8s.sh
+  cluster_up
+  configure_standbys
+  follower_up
+  load_demo_policy
+  announce "The Conjur master endpoint is at: $CONJUR_MASTER_HOST_NAME:$CONJUR_MASTER_PORT"
+  echo
+}
+
+############################
+master_network_up() {
+  docker network create $CONJUR_NETWORK
+}
+
+############################
+shared_volumes_up() {
+  docker volume create $CONJUR_AUDIT_VOLUME
+  docker volume create $CONJUR_NGINX_VOLUME
+}
+
+############################
+master_up() {
+  echo "-----"
+  announce "Initializing Conjur Master"
+  docker run -d \
+    --name $CONJUR_MASTER_CONTAINER_NAME \
+    --label role=conjur_node \
+    --restart always \
+    --volume $CONJUR_AUDIT_VOLUME:/var/log/conjur \
+    --volume $CONJUR_NGINX_VOLUME:/var/log/nginx \
+    --security-opt seccomp:unconfined \
+    $CONJUR_APPLIANCE_IMAGE
+
+  docker network connect $CONJUR_NETWORK $CONJUR_MASTER_CONTAINER_NAME
+
+  docker exec -it $CONJUR_MASTER_CONTAINER_NAME \
+    evoke configure master \
+    -h $CONJUR_MASTER_HOST_NAME \
+    -p $CONJUR_ADMIN_PASSWORD \
+    --master-altnames "$MASTER_ALTNAMES" \
+    --follower-altnames "$FOLLOWER_ALTNAMES" \
+    $CONJUR_ACCOUNT
+
+  echo "Caching Certificate from Conjur in ../etc..."
+  mkdir -p $CACHE_DIR
+  rm -f $MASTER_CERT_FILE
+					# cache cert for copying to other containers
+  docker cp -L $CONJUR_MASTER_CONTAINER_NAME:/opt/conjur/etc/ssl/conjur.pem $MASTER_CERT_FILE
+
+  echo "Caching Conjur Follower seed files in ../etc..."
+  docker exec $CONJUR_MASTER_CONTAINER_NAME evoke seed follower conjur-follower > $FOLLOWER_SEED_FILE
+}
+
+############################
+start_standbys() {
+
+  announce "Initializing Standbys"
+
+  start_standby $CONJUR_STANDBY1_NAME
+  start_standby $CONJUR_STANDBY2_NAME
+}
+
+############################
+start_standby() {
+  local standby_name=$1; shift
+
+  echo "-----"
+  announce "Starting Conjur Standby $standby_name"
+  docker run -d \
+    --name $standby_name \
+    --label role=conjur_node \
+    --restart always \
+    --security-opt seccomp:unconfined \
+    $CONJUR_APPLIANCE_IMAGE
+
+  docker network connect $CONJUR_NETWORK $standby_name
+}
+
+############################
+configure_standbys() {
+  echo "Preparing standby seed files..."
+
+  mkdir -p tmp
+  master_ip=$(docker inspect $CONJUR_MASTER_CONTAINER_NAME --format "{{ .NetworkSettings.IPAddress }}")
+
+  docker exec $CONJUR_MASTER_CONTAINER_NAME evoke seed standby $CONJUR_STANDBY1_NAME $CONJUR_MASTER_CONTAINER_NAME > ./tmp/${CONJUR_STANDBY1_NAME}-seed.tar
+  configure_standby $CONJUR_STANDBY1_NAME $master_ip
+
+  docker exec $CONJUR_MASTER_CONTAINER_NAME evoke seed standby $CONJUR_STANDBY2_NAME $CONJUR_MASTER_CONTAINER_NAME > ./tmp/${CONJUR_STANDBY2_NAME}-seed.tar
+  configure_standby $CONJUR_STANDBY2_NAME $master_ip
+
+#  rm -rf tmp
+
+  echo "Starting synchronous replication..."
+
+  docker exec $CONJUR_MASTER_CONTAINER_NAME evoke replication sync
+
+  echo "Standbys configured."
+}  
+
+############################
+configure_standby() {
+  local standby_name=$1; shift
+  local master_ip=$1; shift
+
+  printf "Configuring standby %s...\n" $standby_name
+
+  docker cp ./tmp/${standby_name}-seed.tar $standby_name:/tmp/${standby_name}-seed.tar
+    
+  docker exec $standby_name evoke unpack seed /tmp/${standby_name}-seed.tar
+  docker exec $standby_name evoke configure standby -i $master_ip
+
+  # enroll standby node in etcd cluster
+  docker exec -it $standby_name evoke cluster enroll -n $standby_name conjur-cluster
+}
+
+############################
+haproxy_up() {
+  docker run -d \
+    --name $HAPROXY_CONTAINER_NAME \
+    --label role=haproxy \
+    -p "$CONJUR_MASTER_PORT:443" \
+    -p "$CONJUR_MASTER_PGSYNC_PORT:5432" \
+    -p "$CONJUR_MASTER_PGAUDIT_PORT:1999" \
+    --privileged \
+    --restart always \
+    --entrypoint "/start.sh" \
+    $HAPROXY_IMAGE
+
+  docker network connect $CONJUR_NETWORK $HAPROXY_CONTAINER_NAME
+
+  docker restart $HAPROXY_CONTAINER_NAME
+}
+
+############################
+cli_up() {
+
+  announce "Creating CLI container."
+
+  start_cli
+  configure_cli
+}
+
+############################
+start_cli() {
+  docker run -d \
+    --name $CLI_CONTAINER_NAME \
+    --label role=cli \
+    --restart always \
+    --security-opt seccomp:unconfined \
+    --entrypoint sh \
+    $CLI_IMAGE_NAME \
+    -c "sleep infinity" 
+
+  echo "CLI container launched."
+}
+
+############################
+configure_cli() {
+  if [[ $NO_DNS ]]; then
+    # add entry to cli container's /etc/hosts so $CONJUR_MASTER_HOST_NAME resolves
+    docker exec -it $CLI_CONTAINER_NAME bash -c "echo \"$CONJUR_MASTER_HOST_IP    $CONJUR_MASTER_HOST_NAME\" >> /etc/hosts"
+  fi
+
+  wait_till_master_is_responsive
+	# initialize cli connection to master & login as admin
+  docker exec -it $CLI_CONTAINER_NAME bash -c "echo yes | conjur init -a $CONJUR_ACCOUNT -u $CONJUR_APPLIANCE_URL --force=true"
+
+  docker exec $CLI_CONTAINER_NAME conjur authn login -u admin -p $CONJUR_ADMIN_PASSWORD
+  docker exec $CLI_CONTAINER_NAME mkdir /policy
+
+  echo "CLI container configured."
+}
+
+############################
+cluster_up() {
+  announce "Initializing etcd cluster..."
+
+  wait_till_master_is_responsive
+  docker cp ./policy/cluster-policy.yml conjur-cli:/policy/cluster-policy.yml
+  docker exec -it conjur-cli conjur policy load root ./policy/cluster-policy.yml
+  docker exec -it $CONJUR_MASTER_CONTAINER_NAME evoke cluster enroll -n $CONJUR_MASTER_CONTAINER_NAME conjur-cluster
+
+ echo "Cluster initialized."
+}
+
+############################
+wait_till_master_is_responsive() {
+  set +e
+  master_is_healthy=""
+  while [[ "$master_is_healthy" == "" ]]; do
+    sleep 2
+    master_is_healthy=$(docker exec -it conjur-cli curl -k $CONJUR_APPLIANCE_URL/health | grep "ok" | tail -1 | grep "true")
+  done
+  set -e
+}
+
+############################
+follower_up() {
+  # Bring up Conjur Follower node
+  docker run -d \
+    --name $CONJUR_FOLLOWER_CONTAINER_NAME \
+    --label role=conjur_node \
+    -p "$CONJUR_FOLLOWER_PORT:443" \
+    -e "CONJUR_AUTHENTICATORS=$CONJUR_AUTHENTICATORS" \
+    --restart always \
+    --security-opt seccomp:unconfined \
+    $CONJUR_APPLIANCE_IMAGE
+
+  if $NO_DNS; then
+    # add entry to follower's /etc/hosts so $CONJUR_MASTER_HOST_NAME resolves
+    docker exec -it $CONJUR_FOLLOWER_CONTAINER_NAME \
+	bash -c "echo \"$CONJUR_MASTER_HOST_IP $CONJUR_MASTER_HOST_NAME\" >> /etc/hosts"
+  fi
+
+  echo "Initializing Conjur Follower"
+  docker cp $FOLLOWER_SEED_FILE \
+		$CONJUR_FOLLOWER_CONTAINER_NAME:/tmp/follower-seed.tar
+  docker exec $CONJUR_FOLLOWER_CONTAINER_NAME \
+		evoke unpack seed /tmp/follower-seed.tar
+  docker exec $CONJUR_FOLLOWER_CONTAINER_NAME \
+		evoke configure follower -p $CONJUR_MASTER_PORT
+
+  echo "Caching DAP Follower cert ..."
+  rm -f $FOLLOWER_CERT_FILE
+  docker cp -L $CONJUR_FOLLOWER_CONTAINER_NAME:/opt/conjur/etc/ssl/conjur-follower.pem $FOLLOWER_CERT_FILE
+
+  echo "Follower configured."
+}
+
+############################
+load_demo_policy() {
+  # Laod policy & init variables
+  load_policy_REST.sh root ./policy/demo-policy.yml
+  var_value_add_REST.sh secrets/db-username "This-is-the-DB-username"
+  var_value_add_REST.sh secrets/db-password $(openssl rand -hex 12)
+}
+
+main $@

@@ -1,0 +1,169 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: conjur-follower
+  labels:
+    app: conjur-follower
+spec:
+  ports:
+  - port: 443
+    name: https
+  selector:
+    app: conjur-follower
+---
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: conjur-follower
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: conjur-follower
+        name: conjur-follower
+        role: follower
+    spec:
+      serviceAccountName: {{ CONJUR_SERVICEACCOUNT_NAME }}
+      hostAliases:
+      - ip: "{{ CONJUR_MASTER_HOST_IP }}"
+        hostnames:
+        - "{{ CONJUR_MASTER_HOST_NAME }}"
+      volumes:
+      - name: seedfile
+        emptyDir:
+          medium: Memory
+      - name: conjur-token
+        emptyDir:
+          medium: Memory
+
+      initContainers:
+      - name: authenticator
+        image: {{ CONJUR_SEED_FETCHER_IMAGE }}
+        imagePullPolicy: {{ IMAGE_PULL_POLICY }}
+        env:
+
+        ## values from metadata ##
+          - name: MY_POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+
+          - name: MY_POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+
+          - name: MY_POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+
+        ## values from Conjur config map ##
+          - name: AUTHENTICATOR_ID
+            valueFrom:
+              configMapKeyRef:
+                name: {{ CONJUR_CONFIG_MAP }}
+                key: AUTHENTICATOR_ID
+
+          - name: CONJUR_ACCOUNT
+            valueFrom:
+              configMapKeyRef:
+                name: {{ CONJUR_CONFIG_MAP }}
+                key: CONJUR_ACCOUNT
+
+          - name: CONJUR_SSL_CERTIFICATE
+            valueFrom:
+              configMapKeyRef:
+                name: {{ CONJUR_CONFIG_MAP }}
+                key: CONJUR_MASTER_CERTIFICATE
+
+        ## value from Follower config map ##
+          - name: FOLLOWER_HOSTNAME
+            valueFrom:
+              configMapKeyRef:
+                name: {{ FOLLOWER_CONFIG_MAP }}
+                key: FOLLOWER_HOSTNAME
+
+          - name: SEEDFILE_DIR
+            valueFrom:
+              configMapKeyRef:
+                name: {{ FOLLOWER_CONFIG_MAP }}
+                key: SEED_FILE_DIR
+
+          - name: CONJUR_SEED_FILE
+            valueFrom:
+              configMapKeyRef:
+                name: {{ FOLLOWER_CONFIG_MAP }}
+                key: CONJUR_SEED_FILE
+
+          - name: CONJUR_SEED_FILE_URL
+            valueFrom:
+              configMapKeyRef:
+                name: {{ FOLLOWER_CONFIG_MAP }}
+                key: CONJUR_SEED_FILE_URL
+
+          - name: CONJUR_AUTHN_LOGIN
+            valueFrom:
+              configMapKeyRef:
+                name: {{ FOLLOWER_CONFIG_MAP }}
+                key: CONJUR_AUTHN_LOGIN_CLUSTER
+
+        volumeMounts:
+          - name: seedfile
+            mountPath: /tmp/seedfile
+          - name: conjur-token
+            mountPath: /run/conjur
+
+      containers:
+      - name: conjur-appliance
+        image: {{ CONJUR_APPLIANCE_IMAGE }}
+        command: ["/tmp/seedfile/start-follower.sh"]
+        imagePullPolicy: {{ IMAGE_PULL_POLICY }}
+        env:
+
+          # from CONJUR_CONFIG_MAP
+          - name: CONJUR_MASTER_PORT
+            valueFrom:
+              configMapKeyRef:
+                name: {{ CONJUR_CONFIG_MAP }}
+                key: CONJUR_MASTER_PORT
+
+          # from FOLLOWER_CONFIG_MAP
+          - name: SEEDFILE_DIR
+            valueFrom:
+              configMapKeyRef:
+                name: {{ FOLLOWER_CONFIG_MAP }}
+                key: SEED_FILE_DIR
+
+          - name: CONJUR_AUTHENTICATORS
+            valueFrom:
+              configMapKeyRef:
+                name: {{ FOLLOWER_CONFIG_MAP }}
+                key: CONJUR_AUTHENTICATORS
+        resources:
+          requests:
+            cpu: "1"
+            memory: 2Gi
+          limits:
+            cpu: "1"
+            memory: 2Gi
+        ports:
+        - containerPort: 443
+          name: https
+        - containerPort: 5432
+          name: pg-main
+        - containerPort: 1999
+          name: pg-audit
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 443
+            scheme: HTTPS
+          initialDelaySeconds: 15
+          timeoutSeconds: 5
+        volumeMounts:
+          - name: seedfile
+            mountPath: /tmp/seedfile
+            readOnly: true
