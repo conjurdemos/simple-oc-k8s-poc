@@ -40,9 +40,9 @@ Note that user RBAC is only enforced for Openshift
    - run start
 3. cd to 2_follower
    - as $CLUSTER_ADMIN_USERNAME, run ./0-cluster-admin.sh, to initialize cyberark namespace
-   - as $DAP_ADMIN_USERNAME, run ./1-tag-push-images.sh
-   - as $DAP_ADMIN_USERNAME, run ./start to deploy follower
+   - as $DAP_ADMIN_USERNAME, run ./1-tag-push-images.sh, to push images to registry
+   - as $DAP_ADMIN_USERNAME, run ./start, to deploy follower.
 4. cd to 3_apps
    - as $CLUSTER_ADMIN_USERNAME, run ./0-cluster-admin.sh, to initialize testapps namespace
-   - as $DEVELOPER_USERNAME, run ./1-tag-push-images.sh
-   - as $DEVELOPER_USERNAME, run ./start to deploy apps
+   - as $DEVELOPER_USERNAME, run ./1-tag-push-images.sh, to push images to registry
+   - as $DEVELOPER_USERNAME, run ./start, to deploy apps.
