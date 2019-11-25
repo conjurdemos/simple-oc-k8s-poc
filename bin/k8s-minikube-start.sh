@@ -52,11 +52,6 @@ else
   minikube start --memory "$MINIKUBE_VM_MEMORY" \
                   --vm-driver virtualbox \
                   --kubernetes-version "$KUBERNETES_VERSION"
-#		  --extra-config=kubelet.config=/var/lib/kubelet/config.yaml \
-#		  --extra-config=apiserver.admission-control="LimitRanger,NamespaceExists,NamespaceLifecycle,ResourceQuota,ServiceAccount,DefaultStorageClass,MutatingAdmissionWebhook"
-#		  --loglevel $LOGLEVEL \
-#		  --extra-config=controller-manager.ClusterSigningCertFile="/var/lib/localkube/certs/ca.crt" \
-#		  --extra-config=controller-manager.ClusterSigningKeyFile="/var/lib/localkube/certs/ca.key"
 
   if [[ ! -d $KUBECONFIGDIR ]]; then
     mkdir $KUBECONFIGDIR
