@@ -6,7 +6,7 @@ Bash scripts that will setup a DAP cluster w/ k8s authentication:
  * 2_follower: initializes auth-k8s for DAP Follower and deploys Followers in k8s/ocp cluster
  * 3_apps: deploys apps in K8s/OCP cluster, retrieves secrets from k8s or ext follower
 
-### Usage notes:
+### General usage notes:
  - The scripts work with either OpenShift or Kubernetes.
  - Scripts tested with:
    - OCP 3.11 (minishift 1.3.4)
@@ -24,10 +24,17 @@ Bash scripts that will setup a DAP cluster w/ k8s authentication:
    - require cluster access with kubectl/oc CLIs.
    - do not need "docker exec" access to the DAP Master or external Follower containers.
    - assume the external Follower already has authn-k8s enabled & configured.
- - By default, the Follower seedfile is pulled from a configmap by a NON-STANDARD seed-fetcher.
-   If CONJUR_SEED_FILE_URL is set, e.g. to $CONJUR_MASTER_URL/configuration/$CONJUR_ACCOUNT/seed/follower,
-   the seed-fetcher will pull the seedfile from the Master.
- - auth-k8s for apps is supported by Followers running in or outside of the cluster.
+
+### Follower deployment notes:
+ - By default, the Follower seedfile is pulled from a configmap by a container instance of the
+   seed-fetcher:dappoc image, and placed in a shared volume. If CONJUR_SEED_FILE_URL is set,
+   e.g. to $CONJUR_MASTER_URL/configuration/$CONJUR_ACCOUNT/seed/follower, the seed-fetcher 
+   will pull the seedfile from the Master.
+ - Followers running in or outside of the k8s cluster can support authn-k8s for apps in the cluster.
+ - If CONJUR_FOLLOWERS_IN_CLUSTER is true, a Follower will be deployed in the K8s cluster, and
+   apps are directed to that follower for authentication & secrets access. 
+ - If CONJUR_FOLLOWERS_IN_CLUSTER is false, apps are directed to the Follower deployed on the 
+   Conjur Master host listening on port 444 for authentication & secrets access.
 
 ### Prerequisites
 1. Docker
@@ -37,7 +44,7 @@ Bash scripts that will setup a DAP cluster w/ k8s authentication:
 ### Usage
 Note:
   - User RBAC is only enforced for Openshift
-  - All $XXX references refer to env vars set in dap.config
+  - All $XXX references refer to env vars set in $DAP_HOME/config/*.config files.
 
 1. cd to cluster/ 
      - edit dap.config
