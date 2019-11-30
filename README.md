@@ -26,10 +26,10 @@ Bash scripts that will setup a DAP cluster w/ k8s authentication:
    - assume the external Follower already has authn-k8s enabled & configured.
 
 ### Follower deployment notes:
- - By default, the Follower seedfile is pulled from a configmap by a container instance of the
-   seed-fetcher:dappoc image, and placed in a shared volume. If CONJUR_SEED_FILE_URL is set,
-   e.g. to $CONJUR_MASTER_URL/configuration/$CONJUR_ACCOUNT/seed/follower, the seed-fetcher 
-   will pull the seedfile from the Master.
+ - By default CONJUR_SEED_FILE_URL is NOT set, and the Follower seedfile is pulled from 
+   a configmap by a container instance of the seed-fetcher:dappoc image, and placed in a shared volume.
+ - If CONJUR_SEED_FILE_URL is set, e.g. to $CONJUR_MASTER_URL/configuration/$CONJUR_ACCOUNT/seed/follower,
+   the seed-fetcher will pull the seedfile from the Master.
  - Followers running in or outside of the k8s cluster can support authn-k8s for apps in the cluster.
  - If CONJUR_FOLLOWERS_IN_CLUSTER is true, a Follower will be deployed in the K8s cluster, and
    apps are directed to that follower for authentication & secrets access. 
