@@ -27,7 +27,7 @@ Note:
    - as $CLUSTER_ADMIN_USERNAME
      - run ./0-cluster-admin.sh, to initialize cyberark namespace
    - as $DAP_ADMIN_USERNAME
-     - load $SEED_FETCHER_IMAGE, ensure to load the tarfile w/ "dappoc" in filename.
+     - load $SEED_FETCHER_IMAGE, be sure to load the tarfile w/ "dappoc" in filename.
      - run ./1-tag-push-images.sh, to push images to registry
      - run ./start, to deploy follower.
 4. cd to 3_apps
