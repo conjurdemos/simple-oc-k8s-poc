@@ -6,6 +6,38 @@ Bash scripts that will setup a DAP cluster w/ k8s authentication:
  * 2_follower: initializes auth-k8s for DAP Follower and deploys Followers in k8s/ocp cluster
  * 3_apps: deploys apps in K8s/OCP cluster, retrieves secrets from k8s or ext follower
 
+### Prerequisites
+1. Docker
+2. Kubernetes or OpenShift
+3. Access to DAP appliance, CLI, authenticator, seed-fetcher:dappoc and test-app images.
+
+### Usage
+Note:
+  - User RBAC is only enforced for Openshift
+  - All $XXX references refer to env vars set in $DAP_HOME/config/*.config files.
+
+1. cd to cluster/ 
+     - edit dap.config
+     - edit either per environment:
+       - kubernetes.config or openshift.config
+2. cd to 1_master
+   - load $CONJUR_APPLIANCE_IMAGE and $CLI_IMAGE
+   - run start
+3. cd to 2_follower
+   - as $CLUSTER_ADMIN_USERNAME
+     - run ./0-cluster-admin.sh, to initialize cyberark namespace
+   - as $DAP_ADMIN_USERNAME
+     - load $SEED_FETCHER_IMAGE
+     - run ./1-tag-push-images.sh, to push images to registry
+     - run ./start, to deploy follower.
+4. cd to 3_apps
+   - as $CLUSTER_ADMIN_USERNAME
+     - run ./0-cluster-admin.sh, to initialize testapps namespace
+   - as $DEVELOPER_USERNAME
+     - load $AUTHENTICATOR_CLIENT_IMAGE and $TEST_APP_IMAGE
+     - run ./1-tag-push-images.sh, to push images to registry
+     - run ./start, to deploy apps.
+
 ### General usage notes:
  - The scripts work with either OpenShift or Kubernetes.
  - Scripts tested with:
@@ -35,35 +67,3 @@ Bash scripts that will setup a DAP cluster w/ k8s authentication:
    apps are directed to that follower for authentication & secrets access. 
  - If CONJUR_FOLLOWERS_IN_CLUSTER is false, apps are directed to the Follower deployed on the 
    Conjur Master host listening on port 444 for authentication & secrets access.
-
-### Prerequisites
-1. Docker
-2. Kubernetes or OpenShift
-3. Access to DAP appliance, CLI, authenticator, seed-fetcher and test-app images.
-
-### Usage
-Note:
-  - User RBAC is only enforced for Openshift
-  - All $XXX references refer to env vars set in $DAP_HOME/config/*.config files.
-
-1. cd to cluster/ 
-     - edit dap.config
-     - edit either per environment:
-       - kubernetes.config or openshift.config
-2. cd to 1_master
-   - load $CONJUR_APPLIANCE_IMAGE and $CLI_IMAGE
-   - run start
-3. cd to 2_follower
-   - as $CLUSTER_ADMIN_USERNAME
-     - run ./0-cluster-admin.sh, to initialize cyberark namespace
-   - as $DAP_ADMIN_USERNAME
-     - load $SEED_FETCHER_IMAGE
-     - run ./1-tag-push-images.sh, to push images to registry
-     - run ./start, to deploy follower.
-4. cd to 3_apps
-   - as $CLUSTER_ADMIN_USERNAME
-     - run ./0-cluster-admin.sh, to initialize testapps namespace
-   - as $DEVELOPER_USERNAME
-     - load $AUTHENTICATOR_CLIENT_IMAGE and $TEST_APP_IMAGE
-     - run ./1-tag-push-images.sh, to push images to registry
-     - run ./start, to deploy apps.
