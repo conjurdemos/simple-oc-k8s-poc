@@ -4,14 +4,6 @@ set -uo pipefail
 source ../config/dap.config
 source ../config/utils.sh
 
-xxmain() {
-  CONJUR_MASTER_URL="https://$CONJUR_MASTER_HOST_NAME:$CONJUR_MASTER_PORT"
-  follower_pod_name=$($CLI get pods -n $CONJUR_NAMESPACE_NAME | grep conjur-follower | tail -1 | awk '{print $1}')
-  CONJUR_SEED_FILE_URL=""
-  update_conjur_config_map
-exit
-}
-
 main() {
   precheck.sh
   check_dependencies
@@ -153,7 +145,8 @@ data:
   FOLLOWER_HOSTNAME: "conjur-follower" # this should be the same value as the service name
   SEED_FILE_DIR: "/tmp/seedfile"
   CONJUR_SEED_FILE_URL: "${CONJUR_SEED_FILE_URL}"
-  CONJUR_SEED_FILE: $(base64 -i "${FOLLOWER_SEED_FILE}")
+  CONJUR_SEED_FILE: |
+$(base64 -i "${FOLLOWER_SEED_FILE}")
   CONJUR_AUTHN_LOGIN_CLUSTER: "${CONJUR_CLUSTER_LOGIN}"
   CONJUR_AUTHENTICATORS: "${CONJUR_AUTHENTICATORS}"
 EOL
