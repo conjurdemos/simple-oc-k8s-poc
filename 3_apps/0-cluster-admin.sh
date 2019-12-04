@@ -20,4 +20,8 @@ sed -e "s#{{ TEST_APP_NAMESPACE_NAME }}#$TEST_APP_NAMESPACE_NAME#g"   \
 
 $CLI apply -f ./manifests/dap-user-rbac-$TEST_APP_NAMESPACE_NAME.yaml
 
+if [[ $PLATFORM == openshift ]]; then
+  $CLI adm pod-network join-projects --to=$CONJUR_NAMESPACE_NAME $TEST_APP_NAMESPACE_NAME > /dev/null 2>&1
+fi
+
 echo "User RBAC manifest applied."
