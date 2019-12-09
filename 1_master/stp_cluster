@@ -37,6 +37,4 @@ if [[ "$(docker volume list | grep $CONJUR_NGINX_VOLUME)" != "" ]]; then
   docker volume rm $CONJUR_NGINX_VOLUME
 fi
 
-scope stop
-
 echo "Conjur environment purged."

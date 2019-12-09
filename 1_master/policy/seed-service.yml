@@ -24,4 +24,4 @@
 # Give followers permission to consume seeds
 - !grant
   role: !layer conjur/seed-generation/consumers
-  member: !host conjur/authn-k8s/dev-aus/apps/cyberark/service_account/conjur-cluster
+  member: !host conjur/authn-k8s/dappoc/apps/cyberark/service_account/conjur-cluster

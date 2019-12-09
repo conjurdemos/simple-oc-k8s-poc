@@ -13,6 +13,7 @@ main() {
   load_policies
   create_k8s_secrets
   deploy_test_app
+  wait_for_ready
   verify_authentication
 }
 
@@ -72,7 +73,6 @@ deploy_test_app() {
   registry_login
   deploy_sidecar_app
   deploy_init_container_app
-  sleep 12  # allow time for containers to initialize
 }
 
 ###########################
@@ -112,14 +112,6 @@ create_app_config_map() {
 
 ###########################
 deploy_sidecar_app() {
-  $CLI delete -n $TEST_APP_NAMESPACE_NAME --ignore-not-found \
-    deployment/test-app-summon-sidecar \
-    service/test-app-summon-sidecar \
-    serviceaccount/test-app-summon-sidecar \
-    serviceaccount/oc-test-app-summon-sidecar
-
-  sleep 5
-
   sed -e "s#{{ TEST_APP_IMAGE }}#$TEST_APP_REG_IMAGE#g" \
       ./manifests/templates/test-app-summon-sidecar.template.yml |
     sed -e "s#{{ AUTHENTICATOR_CLIENT_IMAGE }}#$AUTHENTICATOR_CLIENT_REG_IMAGE#g" |
@@ -138,14 +130,6 @@ deploy_sidecar_app() {
 
 ###########################
 deploy_init_container_app() {
-  $CLI delete -n $TEST_APP_NAMESPACE_NAME --ignore-not-found \
-    deployment/test-app-summon-init \
-    service/test-app-summon-init \
-    serviceaccount/test-app-summon-init \
-    serviceaccount/oc-test-app-summon-init
-
-  sleep 5
-
   sed -e "s#{{ TEST_APP_IMAGE }}#$TEST_APP_REG_IMAGE#g" \
       ./manifests/templates/test-app-summon-init.template.yml |
     sed -e "s#{{ AUTHENTICATOR_CLIENT_IMAGE }}#$AUTHENTICATOR_CLIENT_REG_IMAGE#g" |
@@ -167,6 +151,19 @@ create_k8s_secrets() {
   $CLI delete secret test-app-secret -n $TEST_APP_NAMESPACE_NAME --ignore-not-found 
   $CLI create secret generic test-app-secret \
 	--from-literal=secret-key=Can-You-Read-This-Secret? -n $TEST_APP_NAMESPACE_NAME
+}
+
+###########################
+wait_for_ready() {
+  sleep 3
+  app_pod_name=$($CLI get pods -n $TEST_APP_NAMESPACE_NAME | grep test-app-summon-init | tail -1 | awk '{print $1}')
+  # Wait for app to be ready
+  echo "Waiting for apps to be ready."
+  sleep 3
+  while [[ 'True' != $($CLI get po "$app_pod_name" -n $TEST_APP_NAMESPACE_NAME -o 'jsonpath={.status.conditions[?(@.type=="Ready")].status}') ]]; do
+    echo -n "."; sleep 3
+  done
+  echo ""
 }
 
 ###########################

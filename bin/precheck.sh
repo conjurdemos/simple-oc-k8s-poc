@@ -99,14 +99,11 @@ check_resources() {
 check_ports() {
   echo "Checking for open ports:"
   all_found=true
-  for node in "${DAP_NODES[@]}"; do
-    for port in "${DAP_PORTS[@]}"; do
-      printf "  "
-      if ! nc -4zw3 "$node" "$port"; then
-        echo "  $node $port - Master not reachable (is it running?)"
-        all_found=false
-      fi
-    done
+  for port in "${DAP_PORTS[@]}"; do
+    if [[ "$(curl -skS https://$CONJUR_MASTER_HOST_NAME:$port 2>&1 | grep 'Failed to connect')" != "" ]] ; then
+      echo "  $node $port - Master not reachable (is it running?)"
+      all_found=false
+    fi
   done
   if $all_found; then
     echo "  All ports open."

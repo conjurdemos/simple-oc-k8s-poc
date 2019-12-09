@@ -131,7 +131,6 @@ $(cat "${MASTER_CERT_FILE}" | awk '{ print "    " $0 }')
   CONJUR_APPLIANCE_URL: "https://${CONJUR_FOLLOWER_SERVICE_NAME}"
   CONJUR_AUTHN_URL: "https://${CONJUR_FOLLOWER_SERVICE_NAME}/api/authn-k8s/${AUTHENTICATOR_ID}"
   CONJUR_AUTHN_TOKEN_FILE: "/run/conjur/access-token"
-  CONJUR_AUTHN_TOKEN_FILE_INJECTED: "/run/conjur/conjur-access-token"
 EOL1
 
   # FOLLOWER_CONFIG_MAP holds config info needed by Followers only
@@ -144,11 +143,22 @@ metadata:
 data:
   FOLLOWER_HOSTNAME: "conjur-follower" # this should be the same value as the service name
   SEED_FILE_DIR: "/tmp/seedfile"
-  CONJUR_SEED_FILE_URL: "${CONJUR_SEED_FILE_URL}"
-  CONJUR_SEED_FILE: |
-$(base64 -i "${FOLLOWER_SEED_FILE}" | awk '{ print "    " $0 }')
   CONJUR_AUTHN_LOGIN_CLUSTER: "${CONJUR_CLUSTER_LOGIN}"
   CONJUR_AUTHENTICATORS: "${CONJUR_AUTHENTICATORS}"
+EOL
+
+  # FOLLOWER_BOOTSTRAP_SECRET holds the seedfile and startup script to initialize Followers
+  $CLI delete secret $FOLLOWER_BOOTSTRAP_SECRET --ignore-not-found=true -n $CONJUR_NAMESPACE_NAME
+  cat << EOL | $CLI -n $CONJUR_NAMESPACE_NAME apply -f - 
+apiVersion: v1
+kind: Secret
+metadata:
+  name: "${FOLLOWER_BOOTSTRAP_SECRET}"
+data:
+  FOLLOWER_SEED_FILE: |
+$(base64 -i "${FOLLOWER_SEED_FILE}" | awk '{ print "    " $0 }')
+  FOLLOWER_START_SCRIPT: |
+$(base64 -i "./start-follower.sh" | awk '{ print "    " $0 }')
 EOL
 
   echo "Conjur & Follower config maps created."
@@ -166,9 +176,9 @@ deploy_follower_pods() {
     sed -e "s#{{ CONJUR_MASTER_HOST_IP }}#$CONJUR_MASTER_HOST_IP#g" |
     sed -e "s#{{ CONJUR_MASTER_PORT }}#$CONJUR_MASTER_PORT#g" |
     sed -e "s#{{ CONJUR_SERVICEACCOUNT_NAME }}#$CONJUR_SERVICEACCOUNT_NAME#g" |
-    sed -e "s#{{ CONJUR_SEED_FETCHER_IMAGE }}#$SEED_FETCHER_REG_IMAGE#g" |
     sed -e "s#{{ CONJUR_CONFIG_MAP }}#$CONJUR_CONFIG_MAP#g" |
-    sed -e "s#{{ FOLLOWER_CONFIG_MAP }}#$FOLLOWER_CONFIG_MAP#g" \
+    sed -e "s#{{ FOLLOWER_CONFIG_MAP }}#$FOLLOWER_CONFIG_MAP#g" |
+    sed -e "s#{{ FOLLOWER_BOOTSTRAP_SECRET }}#$FOLLOWER_BOOTSTRAP_SECRET#g" \
     > ./manifests/dap-follower-$CONJUR_NAMESPACE_NAME.yaml
     $CLI apply -n $CONJUR_NAMESPACE_NAME -f ./manifests/dap-follower-$CONJUR_NAMESPACE_NAME.yaml
 

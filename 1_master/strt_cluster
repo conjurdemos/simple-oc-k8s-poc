@@ -166,7 +166,7 @@ start_cli() {
     --restart always \
     --security-opt seccomp:unconfined \
     --entrypoint sh \
-    $CLI_IMAGE_NAME \
+    $CLI_IMAGE \
     -c "sleep infinity" 
 
   echo "CLI container launched."
