@@ -79,11 +79,11 @@ spec:
                 key: CONJUR_AUTHN_TOKEN_FILE
         resources:
           requests:
-            cpu: "300m"
-            memory: "250Mi"
+            cpu: 300m
+            memory: 250Mi
           limits:
-            cpu: "300m"
-            memory: "250Mi"
+            cpu: 300m
+            memory: 250Mi
         volumeMounts:
           - mountPath: /run/conjur
             name: conjur-access-token
@@ -138,11 +138,11 @@ spec:
                 key: conjur-authn-login-sidecar
         resources:
           requests:
-            cpu: "100m"
-            memory: "16Mi"
+            cpu: 100m
+            memory: 16Mi
           limits:
-            cpu: "100m"
-            memory: "16Mi"
+            cpu: 100m
+            memory: 16Mi
         volumeMounts:
           - mountPath: /run/conjur
             name: conjur-access-token
