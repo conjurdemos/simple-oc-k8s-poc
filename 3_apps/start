@@ -1,0 +1,4 @@
+#!/bin/bash
+./0-cluster-admin.sh
+./1-tag-push-images.sh
+./2-start

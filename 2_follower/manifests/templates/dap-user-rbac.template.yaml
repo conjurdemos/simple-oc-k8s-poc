@@ -19,7 +19,7 @@ metadata:
   namespace: {{ CONJUR_NAMESPACE_NAME }}
 subjects:
 - kind: User
-  name: {{ DAP_ADMIN_USERNAME }}
+  name: "{{ DAP_ADMIN_USERNAME }}"
 roleRef:
   kind: ClusterRole
   name: admin

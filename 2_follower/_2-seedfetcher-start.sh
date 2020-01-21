@@ -1,11 +1,13 @@
-#!/bin/bash
+!/bin/bash 
 set -uo pipefail
 
 source ../config/dap.config
 source ../config/utils.sh
 
 main() {
-  ./precheck_k8s_followers.sh
+  precheck.sh
+  check_dependencies
+
   login_as $DAP_ADMIN_USERNAME $DAP_ADMIN_PASSWORD
   ./stop
 
@@ -14,6 +16,24 @@ main() {
     initialize_config_maps
     registry_login
     deploy_follower_pods
+  fi
+}
+
+###########################
+# Verifies critical environment variables have values
+#
+check_dependencies() {
+  check_env_var "CONJUR_APPLIANCE_IMAGE"
+  check_env_var "CONJUR_APPLIANCE_REG_IMAGE"
+  check_env_var "CONJUR_NAMESPACE_NAME"
+  check_env_var "AUTHENTICATOR_ID"
+  check_env_var "DOCKER_REGISTRY_URL"
+  check_env_var "CONJUR_MASTER_PORT"
+  check_env_var "CONJUR_SEED_FILE_URL"
+  check_env_var "SEED_FETCHER_REG_IMAGE"
+  if [[ "$(which jq)" == "" ]]; then
+    echo "jq not installed."
+    exit -1
   fi
 }
 
@@ -54,7 +74,7 @@ initialize_variables() {
 # Validates access to K8s API with service account credentials in DAP Master.
 # This function does three things:
 #   - tests secrets retrieval from the DAP Master
-#   - ensures the K8s API variables have correctly been populated
+#   - ensures the K8s API variables have correctly been populate
 #   - validates those credentials actually enable service account authentication
 #
 verify_k8s_api_access() {
@@ -86,6 +106,9 @@ verify_k8s_api_access() {
 initialize_config_maps() {
   echo "Creating Conjur config map." 
 
+  # get cert and echo to file for later use
+  echo "$(get_cert_REST.sh $CONJUR_MASTER_HOST_NAME $CONJUR_MASTER_PORT)" > $MASTER_CERT_FILE
+
   # Set Conjur Master URL to DNS hostname & port
   CONJUR_MASTER_URL="https://$CONJUR_MASTER_HOST_NAME:$CONJUR_MASTER_PORT"
 
@@ -101,14 +124,16 @@ data:
   FOLLOWER_NAMESPACE_NAME: "${CONJUR_NAMESPACE_NAME}"
   CONJUR_ACCOUNT: "${CONJUR_ACCOUNT}"
   CONJUR_VERSION: "${CONJUR_VERSION}"
-  CONJUR_MASTER_HOST_NAME: "${CONJUR_MASTER_HOST_NAME}"
-  CONJUR_MASTER_PORT: "${CONJUR_MASTER_PORT}"
   CONJUR_MASTER_URL: "${CONJUR_MASTER_URL}"
+  CONJUR_MASTER_PORT: "${CONJUR_MASTER_PORT}"
   CONJUR_MASTER_CERTIFICATE: |
 $(cat "${MASTER_CERT_FILE}" | awk '{ print "    " $0 }')
   CONJUR_AUTHN_LOGIN_CLUSTER: "${CONJUR_CLUSTER_LOGIN}"
   CONJUR_AUTHENTICATORS: "${CONJUR_AUTHENTICATORS}"
   AUTHENTICATOR_ID: "${AUTHENTICATOR_ID}"
+  CONJUR_SEED_FILE_URL: "${CONJUR_SEED_FILE_URL}"
+  FOLLOWER_SEED_FILE: |
+$(base64 -i "${FOLLOWER_SEED_FILE}" | awk '{ print "    " $0 }')
   CONJUR_APPLIANCE_URL: "https://${CONJUR_FOLLOWER_SERVICE_NAME}"
   CONJUR_AUTHN_URL: "https://${CONJUR_FOLLOWER_SERVICE_NAME}/api/authn-k8s/${AUTHENTICATOR_ID}"
   CONJUR_AUTHN_TOKEN_FILE: "/run/conjur/access-token"
@@ -128,22 +153,10 @@ data:
   FOLLOWER_HOSTNAME: "conjur-follower" # this should be the same value as the service name
   SEED_FILE_DIR: "/tmp/seedfile"
   CONJUR_SEED_FILE_URL: "${CONJUR_SEED_FILE_URL}"
+  CONJUR_SEED_FILE: |
+$(base64 -i "${FOLLOWER_SEED_FILE}" | awk '{ print "    " $0 }')
   CONJUR_AUTHN_LOGIN_CLUSTER: "${CONJUR_CLUSTER_LOGIN}"
   CONJUR_AUTHENTICATORS: "${CONJUR_AUTHENTICATORS}"
-EOL
-
-  # FOLLOWER_BOOTSTRAP_SECRET holds the seedfile and startup script to initialize Followers
-  $CLI delete secret $FOLLOWER_BOOTSTRAP_SECRET --ignore-not-found=true -n $CONJUR_NAMESPACE_NAME
-  cat << EOL | $CLI -n $CONJUR_NAMESPACE_NAME apply -f - 
-apiVersion: v1
-kind: Secret
-metadata:
-  name: "${FOLLOWER_BOOTSTRAP_SECRET}"
-data:
-  FOLLOWER_SEED_FILE: |
-$(base64 -i "${FOLLOWER_SEED_FILE}" | awk '{ print "    " $0 }')
-  FOLLOWER_START_SCRIPT: |
-$(base64 -i "build/start-follower.sh" | awk '{ print "    " $0 }')
 EOL
 
   echo "Conjur & Follower config maps created."
@@ -154,16 +167,16 @@ deploy_follower_pods() {
   announce "Deploying Follower pod(s)..."
 
   sed -e "s#{{ CONJUR_APPLIANCE_IMAGE }}#$CONJUR_APPLIANCE_REG_IMAGE#g" \
-     "./manifests/templates/dap-follower-deploy.template.yaml" |
+     "./manifests/templates/dap-follower-seedfetcher.template.yaml" |
     sed -e "s#{{ AUTHENTICATOR_ID }}#$AUTHENTICATOR_ID#g" |
     sed -e "s#{{ IMAGE_PULL_POLICY }}#$IMAGE_PULL_POLICY#g" |
     sed -e "s#{{ CONJUR_MASTER_HOST_NAME }}#$CONJUR_MASTER_HOST_NAME#g" |
     sed -e "s#{{ CONJUR_MASTER_HOST_IP }}#$CONJUR_MASTER_HOST_IP#g" |
     sed -e "s#{{ CONJUR_MASTER_PORT }}#$CONJUR_MASTER_PORT#g" |
     sed -e "s#{{ CONJUR_SERVICEACCOUNT_NAME }}#$CONJUR_SERVICEACCOUNT_NAME#g" |
+    sed -e "s#{{ CONJUR_SEED_FETCHER_IMAGE }}#$SEED_FETCHER_REG_IMAGE#g" |
     sed -e "s#{{ CONJUR_CONFIG_MAP }}#$CONJUR_CONFIG_MAP#g" |
-    sed -e "s#{{ FOLLOWER_CONFIG_MAP }}#$FOLLOWER_CONFIG_MAP#g" |
-    sed -e "s#{{ FOLLOWER_BOOTSTRAP_SECRET }}#$FOLLOWER_BOOTSTRAP_SECRET#g" \
+    sed -e "s#{{ FOLLOWER_CONFIG_MAP }}#$FOLLOWER_CONFIG_MAP#g" \
     > ./manifests/dap-follower-$CONJUR_NAMESPACE_NAME.yaml
     $CLI apply -n $CONJUR_NAMESPACE_NAME -f ./manifests/dap-follower-$CONJUR_NAMESPACE_NAME.yaml
 

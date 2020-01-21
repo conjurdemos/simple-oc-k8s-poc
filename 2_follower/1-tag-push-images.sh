@@ -13,7 +13,7 @@ source ../config/utils.sh
 
 precheck.sh
 
-login_as $DAP_ADMIN_USERNAME
+login_as $DAP_ADMIN_USERNAME $DAP_ADMIN_PASSWORD
 
 registry_login
 

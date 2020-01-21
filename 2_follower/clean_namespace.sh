@@ -17,9 +17,9 @@ echo "Deleting server-certificate config map."
 $CLI delete --ignore-not-found cm $CONJUR_CONFIG_MAP
 
 echo "Deleting cluster roles, role bindings and service accounts."
-$CLI delete --ignore-not-found clusterrole conjur-authenticator
-$CLI delete --ignore-not-found rolebinding conjur-authenticator-role-binding
-$CLI delete --ignore-not-found sa $CONJUR_SERVICEACCOUNT_NAME -n $CONJUR_NAMESPACE_NAME
+$CLI delete --ignore-not-found clusterrole conjur-authenticator-$CONJUR_NAMESPACE_NAME
+$CLI delete --ignore-not-found rolebinding conjur-authenticator-role-binding-$CONJUR_NAMESPACE_NAME
+$CLI delete --ignore-not-found sa $CONJUR_SERVICEACCOUNT_NAME
 
 echo "Waiting for Conjur pods to terminate..."
 while [[ "$($CLI get pods -n $CONJUR_NAMESPACE_NAME 2>&1 | grep conjur-follower)" != "" ]]; do

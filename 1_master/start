@@ -10,7 +10,7 @@ source ../config/$PLATFORM.config
 
 #################
 main() {
-  precheck.sh
+  ./precheck_master.sh
   ./stop
   while [[ "$(docker ps -a | grep $CONJUR_MASTER_CONTAINER_NAME)" != "" ]]; do
     echo -n '.'
@@ -20,8 +20,9 @@ main() {
   shared_volumes_up
   master_up
   ./enable_dap_node_for_k8s.sh
+  store_config_files_in_cache_dir
   cli_up
-  follower_up
+#  follower_up
   load_demo_policy
   ./exec-into-cli.sh
 }
@@ -60,23 +61,31 @@ master_up() {
   echo "Configuring Conjur master..."
   docker exec $CONJUR_MASTER_CONTAINER_NAME \
                 evoke configure master      \
-		--accept-eula		    \
                 -h $CONJUR_MASTER_HOST_NAME \
                 -p $CONJUR_ADMIN_PASSWORD   \
 		--master-altnames "$MASTER_ALTNAMES"     \
 		--follower-altnames "$FOLLOWER_ALTNAMES" \
+		--accept-eula		    \
                 $CONJUR_ACCOUNT
 
+  echo "Master configured."
+}
+
+store_config_files_in_cache_dir() {
   echo "Caching DAP Master certificate..."
   mkdir -p $CACHE_DIR
   rm -f $MASTER_CERT_FILE $FOLLOWER_CERT_FILE
   docker cp -L $CONJUR_MASTER_CONTAINER_NAME:/opt/conjur/etc/ssl/conjur.pem $MASTER_CERT_FILE
 
+  echo "Caching DAP Follower certificate..."
+  rm -f $FOLLOWER_CERT_FILE
+  docker exec $CONJUR_MASTER_CONTAINER_NAME \
+	bash -c "evoke ca issue conjur-follower $CONJUR_MASTER_HOST_NAME $CONJUR_FOLLOWER_SERVICE_NAME"
+  docker cp -L $CONJUR_MASTER_CONTAINER_NAME:/opt/conjur/etc/ssl/conjur-follower.pem $FOLLOWER_CERT_FILE
+
   echo "Caching Conjur Follower seed file..."
   rm -f $FOLLOWER_SEED_FILE
   docker exec $CONJUR_MASTER_CONTAINER_NAME evoke seed follower conjur-follower > $FOLLOWER_SEED_FILE
-
-  echo "Master configured."
 }
 
 #################
@@ -125,10 +134,6 @@ follower_up() {
 		evoke unpack seed /tmp/follower-seed.tar
   docker exec $CONJUR_FOLLOWER_CONTAINER_NAME \
 		evoke configure follower -p $CONJUR_MASTER_PORT
-
-  echo "Caching DAP Follower cert ..."
-  rm -f $FOLLOWER_CERT_FILE
-  docker cp -L $CONJUR_FOLLOWER_CONTAINER_NAME:/opt/conjur/etc/ssl/conjur-follower.pem $FOLLOWER_CERT_FILE
 
   echo "Follower configured."
 }

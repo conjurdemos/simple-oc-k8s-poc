@@ -8,6 +8,7 @@
   body:
   - !group nodes
   - !host node1
+  - !host node2
   - !grant
     role: !group nodes
     member: !host node1

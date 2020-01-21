@@ -4,6 +4,8 @@ set -eo pipefail
 source ../config/dap.config
 source ../config/utils.sh
 
+login_as $DEVELOPER_USERNAME $DEVELOPER_PASSWORD
+
 if ! [ "${DOCKER_EMAIL}" = "" ]; then
   echo "Deleting image pull secret."
   $CLI delete --ignore-not-found secret dockerpullsecret -n $TEST_APP_NAMESPACE_NAME
@@ -30,6 +32,15 @@ $CLI delete --ignore-not-found \
   service/test-app-summon-init \
   serviceaccount/test-app-summon-init \
   -n $TEST_APP_NAMESPACE_NAME
+
+echo "Deleting test app/secrets injection deployment."
+$CLI delete --ignore-not-found \
+  deployment/test-app-secrets-injection \
+  service/test-app-secrets-injection \
+  secret/db-credentials \
+  -n $TEST_APP_NAMESPACE_NAME
+
+rm -f manifests/*.yaml manifests/*.yml
 
 echo "Waiting for pods to terminate"
 until [[ "$($CLI get pods -n $TEST_APP_NAMESPACE_NAME 2>&1 | grep test-app-summon)" == "" ]]; do

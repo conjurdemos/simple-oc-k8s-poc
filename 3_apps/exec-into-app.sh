@@ -4,7 +4,7 @@ source ../config/$PLATFORM.config
 source ../config/utils.sh
 
 if [[ $# != 1 ]]; then
-  echo "specify 'init' or 'side'"
+  echo "specify 'init', 'side' or 'inject'"
   exit -1
 fi
 set_namespace $TEST_APP_NAMESPACE_NAME

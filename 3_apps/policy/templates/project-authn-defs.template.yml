@@ -19,6 +19,11 @@
       annotations:
         kubernetes/authentication-container-name: authenticator
         kubernetes: "true"
+    - !host
+      id: {{ TEST_APP_NAMESPACE_NAME }}/*/*
+      annotations:
+        kubernetes/authentication-container-name: secrets-provider
+        kubernetes: "true"
 
   - !grant
     role: !layer

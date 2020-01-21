@@ -4,10 +4,10 @@ source ../config/dap.config
 
 DAP_IMAGES=(
   $CONJUR_APPLIANCE_IMAGE
-  $CLI_IMAGE
   $SEED_FETCHER_IMAGE
   $TEST_APP_IMAGE
   $AUTHENTICATOR_CLIENT_IMAGE
+  $SECRETS_PROVIDER_IMAGE
 )
 
 DAP_BINARIES=(
@@ -15,11 +15,14 @@ DAP_BINARIES=(
   summon
   base64
   openssl
-  nc
+  curl
 )
 
 DAP_RESOURCES=(
   /usr/local/lib/summon/summon-conjur
+  $MASTER_CERT_FILE
+  $FOLLOWER_CERT_FILE
+  $FOLLOWER_SEED_FILE
 )
 
 DAP_NODES=(
@@ -33,6 +36,16 @@ DAP_PORTS=(
   "$CONJUR_FOLLOWER_PORT"
 )
 
+DAP_ENV_VARS=(
+  "CONJUR_VERSION"
+  "CONJUR_NAMESPACE_NAME"
+  "TEST_APP_NAMESPACE_NAME"
+  "DOCKER_REGISTRY_URL"
+  "CONJUR_ACCOUNT"
+  "CONJUR_ADMIN_PASSWORD"
+  "AUTHENTICATOR_ID"
+)
+
 ##############################
 main() {
   clear
@@ -40,6 +53,7 @@ main() {
   check_binaries
   check_resources
   check_ports
+  check_env_vars
   read -n 1 -s -r -p "Review and press any key to continue..."
   echo
 }
@@ -107,6 +121,22 @@ check_ports() {
   done
   if $all_found; then
     echo "  All ports open."
+  fi
+  echo ""
+}
+
+##############################
+check_env_vars() {
+  echo "Checking environment variables:"
+  all_found=true
+  for var_name in "${DAP_ENV_VARS[@]}"; do
+    if [ "${var_name}" = "" ]; then
+      echo "You must set $var_name before running these scripts."
+      exit 1
+    fi
+  done
+  if $all_found; then
+    echo "  All environment variables set."
   fi
   echo ""
 }

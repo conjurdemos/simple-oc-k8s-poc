@@ -12,9 +12,9 @@ source ../config/utils.sh
 # and with cli:
 #  - adds scc anyuid to Follower service account
 
-precheck.sh
+./precheck_k8s_followers.sh
 
-login_as $CLUSTER_ADMIN_USERNAME
+login_as $CLUSTER_ADMIN_USERNAME $CLUSTER_ADMIN_PASSWORD
 
 
 announce "Applying Follower authn-k8s manifest..."

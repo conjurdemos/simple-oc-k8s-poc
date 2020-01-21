@@ -5,27 +5,15 @@ source ../config/dap.config
 source ../config/utils.sh
 
 main() {
-  check_dependencies
+  ./precheck_k8s_apps.sh
 
-  login_as $DEVELOPER_USERNAME
+  login_as $DEVELOPER_USERNAME $DEVELOPER_PASSWORD
   ./stop
 
   load_policies
-  create_k8s_secrets
-  deploy_test_app
+  deploy_test_apps
   wait_for_ready
   verify_authentication
-}
-
-############################
-check_dependencies() {
-  check_env_var "CONJUR_VERSION"
-  check_env_var "CONJUR_NAMESPACE_NAME"
-  check_env_var "TEST_APP_NAMESPACE_NAME"
-  check_env_var "DOCKER_REGISTRY_URL"
-  check_env_var "CONJUR_ACCOUNT"
-  check_env_var "CONJUR_ADMIN_PASSWORD"
-  check_env_var "AUTHENTICATOR_ID"
 }
 
 ############################
@@ -65,7 +53,7 @@ policy/resource-access-grants.yml
 }
 
 ############################
-deploy_test_app() {
+deploy_test_apps() {
   announce "Deploying test apps for $TEST_APP_NAMESPACE_NAME."
   copy_conjur_config_map
   create_app_config_map
@@ -73,6 +61,7 @@ deploy_test_app() {
   registry_login
   deploy_sidecar_app
   deploy_init_container_app
+  deploy_secrets_injection_app
 }
 
 ###########################
@@ -107,7 +96,8 @@ create_app_config_map() {
         -n $TEST_APP_NAMESPACE_NAME \
         --from-literal=conjur-authn-url="$conjur_authenticator_url" \
         --from-literal=conjur-authn-login-init="$conjur_authn_login_prefix/test-app-summon-init" \
-        --from-literal=conjur-authn-login-sidecar="$conjur_authn_login_prefix/test-app-summon-sidecar"
+        --from-literal=conjur-authn-login-sidecar="$conjur_authn_login_prefix/test-app-summon-sidecar" \
+        --from-literal=conjur-authn-login-injection="host/conjur/authn-k8s/$AUTHENTICATOR_ID/apps/$TEST_APP_NAMESPACE_NAME/*/*"
 }
 
 ###########################
@@ -147,10 +137,23 @@ deploy_init_container_app() {
 }
 
 ###########################
-create_k8s_secrets() {
-  $CLI delete secret test-app-secret -n $TEST_APP_NAMESPACE_NAME --ignore-not-found 
-  $CLI create secret generic test-app-secret \
-	--from-literal=secret-key=Can-You-Read-This-Secret? -n $TEST_APP_NAMESPACE_NAME
+deploy_secrets_injection_app() {
+  $CLI apply -f ./manifests/templates/k8s-secrets.template.yml -n $TEST_APP_NAMESPACE_NAME
+
+  sed -e "s#{{ TEST_APP_IMAGE }}#$TEST_APP_REG_IMAGE#g" \
+      ./manifests/templates/test-app-secrets-injection.template.yml |
+    sed -e "s#{{ SECRETS_PROVIDER_IMAGE }}#$SECRETS_PROVIDER_REG_IMAGE#g" |
+    sed -e "s#{{ IMAGE_PULL_POLICY }}#$IMAGE_PULL_POLICY#g" |
+    sed -e "s#{{ CONJUR_MASTER_HOST_NAME }}#$CONJUR_MASTER_HOST_NAME#g" |
+    sed -e "s#{{ CONJUR_MASTER_HOST_IP }}#$CONJUR_MASTER_HOST_IP#g" |
+    sed -e "s#{{ TEST_APP_NAMESPACE_NAME }}#$TEST_APP_NAMESPACE_NAME#g" |
+    sed -e "s#{{ CONJUR_CONFIG_MAP }}#$CONJUR_CONFIG_MAP#g" |
+    sed -e "s#{{ APP_CONFIG_MAP }}#$APP_CONFIG_MAP#g" \
+    > ./manifests/test-app-secrets-injection-$TEST_APP_NAMESPACE_NAME.yml
+
+  $CLI create -f ./manifests/test-app-secrets-injection-$TEST_APP_NAMESPACE_NAME.yml -n $TEST_APP_NAMESPACE_NAME
+
+  echo "Test app/secrets-injection deployed."
 }
 
 ###########################
@@ -184,6 +187,13 @@ verify_authentication() {
     echo "Init Container + REST API: $($CLI exec -n $TEST_APP_NAMESPACE_NAME -c test-app $init_api_pod -- /webapp.sh)"
     echo "Init Container + Summon:"
     echo "$($CLI exec -n $TEST_APP_NAMESPACE_NAME -c test-app $init_api_pod -- summon /webapp_summon.sh)"
+  fi
+
+  injector_api_pod=$($CLI get pods -n $TEST_APP_NAMESPACE_NAME --no-headers -l app=test-app-secrets-injection | awk '{ print $1 }')
+  if [[ "$injector_api_pod" != "" ]]; then
+    echo
+    echo "Injector Container:"
+    echo "$($CLI exec -n $TEST_APP_NAMESPACE_NAME -c test-app $injector_api_pod -- /webapp_summon.sh)"
   fi
 }
 

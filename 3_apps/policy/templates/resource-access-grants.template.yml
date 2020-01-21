@@ -16,6 +16,7 @@
   - !variable k8s-secrets/db-username
   - !variable k8s-secrets/db-password
 
+# Grant access to PAS secrets synched to Conjur cluster
 #- !grant
 #  role: !group Vault/LOB/Safe/delegation/consumers
 #  member: !layer {{ TEST_APP_NAMESPACE_NAME }}
