@@ -5,8 +5,7 @@ source ../config/dap.config
 source ../config/utils.sh
 
 main() {
-  precheck.sh
-  check_dependencies
+  ./precheck_k8s_followers.sh
 
   login_as $DAP_ADMIN_USERNAME $DAP_ADMIN_PASSWORD
   ./stop
@@ -16,24 +15,6 @@ main() {
     initialize_config_maps
     registry_login
     deploy_follower_pods
-  fi
-}
-
-###########################
-# Verifies critical environment variables have values
-#
-check_dependencies() {
-  check_env_var "CONJUR_APPLIANCE_IMAGE"
-  check_env_var "CONJUR_APPLIANCE_REG_IMAGE"
-  check_env_var "CONJUR_NAMESPACE_NAME"
-  check_env_var "AUTHENTICATOR_ID"
-  check_env_var "DOCKER_REGISTRY_URL"
-  check_env_var "CONJUR_MASTER_PORT"
-  check_env_var "CONJUR_SEED_FILE_URL"
-  check_env_var "SEED_FETCHER_REG_IMAGE"
-  if [[ "$(which jq)" == "" ]]; then
-    echo "jq not installed."
-    exit -1
   fi
 }
 
