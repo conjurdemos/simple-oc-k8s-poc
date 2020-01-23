@@ -1,0 +1,94 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: conjur-follower
+  labels:
+    app: conjur-follower
+spec:
+  ports:
+  - port: 443
+    name: https
+  selector:
+    app: conjur-follower
+---
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: conjur-follower
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: conjur-follower
+        name: conjur-follower
+        role: follower
+    spec:
+      serviceAccountName: conjur-cluster
+      hostAliases:
+      - ip: "192.168.99.100"
+        hostnames:
+        - "conjur-master-vbx"
+      volumes:
+      - name: follower-bootstrap
+        secret:
+          secretName: follower-bootstrap-secret
+          items:
+          - key: FOLLOWER_START_SCRIPT
+            path: start-follower.sh
+            mode: 511
+          - key: FOLLOWER_SEED_FILE
+            path: follower-seed.tar
+            mode: 420
+      containers:
+      - name: conjur-appliance
+        image: 192.168.99.100:5000/conjur-appliance:11.1.1
+        imagePullPolicy: IfNotPresent
+        volumeMounts:
+          - name: follower-bootstrap
+            mountPath: /tmp/seedfile
+            readOnly: true
+        command: ["/tmp/seedfile/start-follower.sh"]
+        env:
+
+          # from CONJUR_CONFIG_MAP
+          - name: CONJUR_MASTER_PORT
+            valueFrom:
+              configMapKeyRef:
+                name: conjur-config
+                key: CONJUR_MASTER_PORT
+
+          # from FOLLOWER_CONFIG_MAP
+          - name: SEEDFILE_DIR
+            valueFrom:
+              configMapKeyRef:
+                name: follower-config
+                key: SEED_FILE_DIR
+
+          - name: CONJUR_AUTHENTICATORS
+            valueFrom:
+              configMapKeyRef:
+                name: follower-config
+                key: CONJUR_AUTHENTICATORS
+        ports:
+        - containerPort: 443
+          name: https
+        - containerPort: 5432
+          name: pg-main
+        - containerPort: 1999
+          name: pg-audit
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 443
+            scheme: HTTPS
+          initialDelaySeconds: 15
+          timeoutSeconds: 5
+        resources:
+          requests:
+            cpu: 500m
+            memory: 2Gi
+          limits:
+            cpu: 500m
+            memory: 2Gi
