@@ -92,12 +92,6 @@ spec:
                 name: {{ FOLLOWER_CONFIG_MAP }}
                 key: SEED_FILE_DIR
 
-          - name: CONJUR_SEED_FILE
-            valueFrom:
-              configMapKeyRef:
-                name: {{ FOLLOWER_CONFIG_MAP }}
-                key: CONJUR_SEED_FILE
-
           - name: CONJUR_SEED_FILE_URL
             valueFrom:
               configMapKeyRef:
