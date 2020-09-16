@@ -78,9 +78,8 @@ add_new_authenticator() {
   set -e
 
   if [[ "$authn_str" == "" ]]; then	# If no authenticators specified...
-					# add authenticators to conjur.conf
-    echo "CONJUR_AUTHENTICATORS=\"${CONJUR_AUTHENTICATORS}\"" >> temp.conf
-    docker exec -i $DAP_NODE_CONTAINER_NAME dd of=/opt/conjur/etc/conjur.conf < temp.conf
+		# add authenticators to conjur.conf
+    docker exec -i $DAP_NODE_CONTAINER_NAME sh -c "evoke variable set CONJUR_AUTHENTICATORS \"$CONJUR_AUTHENTICATORS\""
   else
 					# else replace line in conjur.conf
     docker exec $DAP_NODE_CONTAINER_NAME \
